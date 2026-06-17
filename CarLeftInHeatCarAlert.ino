@@ -3,23 +3,40 @@ Seeed Arduino SSCMA 1.0.3
 ArduinoJson 7.4.3
 DHT sensor library 1.4.7
 Adafruit Unified Sensor 1.1.15
+WiFiS3 ...
+Adafruit_SSD1306 ...
 */
 
 // HEADER FILES
 #include <Seeed_Arduino_SSCMA.h>
 #include <DHT.h>
 #include <Wire.h>
+#include <Adafruit_SSD1306.h>
+#include <WiFiS3.h>
+
 
 // GLOBAL VARIABLES
 
-// PINS
+//WIFI CREDENTIALS
+const char* WIFI_SSID = "YOUR_SSID";
+const char* WIFI_PASS = "YOUR_PASSWORD";
+
+//PINS
 const int powerSwitch = 4;
 const int pressureDivider = A0;
 const int temperatureSensor = 2;
+const int disarmButton = 3;
 
 //TRANSITION VALUES
 float STAGE2RANGE[] = {80.00,81.00}; 
 float STAGE3TEMP = 81.50;
+const int pressureThreshold = 300;
+long elapsed;
+long alertStart;
+
+//BOOLS
+bool driverPresent = false;
+bool childDetected = false;
 
 //ENUMS
 enum State {
@@ -39,10 +56,12 @@ float temperature;
 //Initialize Libraries/Parts or whatever
 DHT dht(temperatureSensor,DHT22);
 SSCMA AI;
-
+WiFiServer server(80);
+Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 
 // FUNCTIONS
 
+//STATE MACHINE
 void transitionState() {
   currentState = nextState;
 }
@@ -85,6 +104,9 @@ void determineNextState() {
       nextState = State::IDLE;
       break;
   }
+  if (digitalRead(disarmButton) == LOW) {
+    nextState = State::IDLE;
+  }
 }
 
 void determineOutputs() {
@@ -106,6 +128,106 @@ void determineOutputs() {
       Serial.println("Stage 4");
       break;
   }
+  updateOled()
+}
+
+
+// ── OLED update ───────────────────────────────────────────────────────────────
+void updateOled() {
+  oled.clearDisplay();
+  oled.setTextSize(1);
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setCursor(0, 0);
+  oled.print("SafeSeat  Stage ");
+  oled.println(currentState);
+  oled.print("Temp: ");
+  oled.print(tempC, 1);
+  oled.println(" C");
+  oled.print("HI:   ");
+  oled.print(heatIndex, 1);
+  oled.println(" C");
+  if (currentState != State::IDLE) {
+    oled.println();
+    oled.println("!! CHILD IN VEHICLE");
+  }
+  oled.display();
+}
+
+// ── LED + buzzer per stage ────────────────────────────────────────────────────
+void updateOutputs() {
+  switch (currentState) {
+    case State::IDLE:
+      analogWrite(PIN_LED, 0);
+      noTone(PIN_BUZZER);
+      break;
+    case State::STAGE1:
+      // Slow amber pulse — PWM breathe
+      analogWrite(PIN_LED, (millis() / 8) % 255);
+      tone(PIN_BUZZER, 880, 200);
+      break;
+    case State::STAGE2:
+      analogWrite(PIN_LED, 180);
+      tone(PIN_BUZZER, 1047, 100);
+      break;
+    case State::STAGE3:
+      // Rapid strobe
+      analogWrite(PIN_LED, (millis() / 80) % 2 == 0 ? 255 : 0);
+      tone(PIN_BUZZER, 1500, 50);
+      break;
+    case State::STAGE4:
+      analogWrite(PIN_LED, 255);
+      tone(PIN_BUZZER, 2000, 500);
+      break;
+  }
+}
+
+
+// ── JSON payload ──────────────────────────────────────────────────────────────
+String buildJson() {
+  String j = "{";
+  j += "\"temp\":"          + String(temperature, 2)      + ",";
+  j += "\"driverPresent\":" + (driverPresent ? "true" : "false") + ",";
+  j += "\"childDetected\":" + (childDetected ? "true" : "false") + ",";
+  j += "\"stage\":"         + String(currentState)     + ",";
+  j += "\"elapsedSecs\":"   + String((currentState != State::IDLE) ? ((millis() - alertStart) / 1000 : 0));
+  j += "}";
+  return j;
+}
+
+
+// ── HTTP request handler ──────────────────────────────────────────────────────
+void handleClient(WiFiClient& client) {
+  String req = "";
+  while (client.connected() && client.available()) {
+    char c = client.read();
+    req += c;
+    if (req.endsWith("\r\n\r\n")) break;
+  }
+
+  bool isStatus = req.indexOf("GET /status") >= 0;
+  bool isAck    = req.indexOf("POST /ack")   >= 0;
+
+  if (isAck) {
+    currentState    = State::IDLE;
+    //driverPresent = true; dont really want to force driver present on reset
+    client.println("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nok");
+    return;
+  }
+
+  if (isStatus) {
+    String body = buildJson();
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: application/json");
+    client.println("Access-Control-Allow-Origin: *");
+    client.print("Content-Length: ");
+    client.println(body.length());
+    client.println("Connection: close");
+    client.println();
+    client.print(body);
+    return;
+  }
+
+  client.println("HTTP/1.1 404 Not Found\r\n\r\n");
 }
 
 bool detectBaby() {
@@ -114,16 +236,39 @@ bool detectBaby() {
 //MAIN FUNCTIONS
 void setup() {
   // put your setup code here, to run once:
+  
+  //Serial setup
+  Serial.begin(115200);
+
+
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
+  pinMode(disarmButton, INPUT_PULLUP);
   Wire.begin(); //Setup for I2C
 
-  //Serial setup
-  Serial.begin(9600);
 
   //Sensor Setup
   dht.begin();
   AI.begin(&Wire); //Begin the AI Module getting info through the I2C port
+  //OLED
+  if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("SSD1306 not found");
+  }
+  oled.clearDisplay();
+  oled.display();
+
+  // WiFi
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());  // <── copy this into the app Settings
+
+  server.begin();
 }
 
 void loop() {
@@ -131,10 +276,27 @@ void loop() {
 
   temperature = dht.readTemperature(true); //In fahrenheit
   
+  /*
+  int fsrRaw  = analogRead(PIN_FSR);
+  seatOccupied  = fsrRaw > FSR_THRESHOLD;
+  driverPresent = digitalRead(PIN_PIR) == HIGH;
+  */
+
   determineNextState();
   determineOutputs();
   transitionState();
 
+  int pressureSensorValue = analogRead(pressureDivider);
+  driverPresent = (pressureSensorValue > pressureThreshold);
+  childDetected = driverPresent; //shortcut until AI Module is up
+
+  // ── HTTP server ─────────────────────────────────────────────────────────────
+  WiFiClient client = server.available();
+  if (client) {
+    handleClient(client);
+    client.stop();
+  }
+
   Serial.println(temperature);
-  delay(2500);
+  delay(500);
 }
