@@ -13,19 +13,19 @@ npx expo start
 ## Project structure
 
 ```
-App.tsx                     → Root: navigation + providers
+App.tsx                       → Root: navigation + providers
 src/
-  hooks/useSafeSeat.ts      → Central state: sensors, alert stage, event log
+  hooks/useSafeSeat.ts        → Central state: sensors, alert stage, event log
   screens/DashboardScreen.tsx → Main monitoring view
   screens/AlertsScreen.tsx    → Notification log + escalation timeline
   screens/SettingsScreen.tsx  → Device config, emergency contact, Twilio
-  utils/theme.ts             → Colors, spacing, stage metadata
-safeseat_arduino.ino         → Arduino R4 firmware
+  utils/theme.ts              → Colors, spacing, stage metadata
+CarLeftInHeatCarAlert.ino   → Arduino R4 firmware
 ```
 
 ## Connecting to the Arduino R4
 
-1. Flash `safeseat_arduino.ino` via Arduino IDE (Board: Arduino Uno R4 WiFi)
+1. Flash `CarLeftInHeatCarAlert.ino` via Arduino IDE (Board: Arduino Uno R4 WiFi)
 2. Set your WiFi SSID + password in the sketch
 3. Open Serial Monitor — copy the printed IP address
 4. In the app → Settings → enter that IP under "Device IP address"
