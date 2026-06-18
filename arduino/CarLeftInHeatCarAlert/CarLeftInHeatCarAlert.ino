@@ -4,7 +4,9 @@ ArduinoJson 7.4.3
 DHT sensor library 1.4.7
 Adafruit Unified Sensor 1.1.15
 WiFiS3 ...
-Adafruit_SSD1306 ...
+Adafruit_SSD1306 2.5.17
+Adafruit GFX Library 1.12.6
+Adafruit BusIO 1.17.4
 */
 
 // HEADER FILES
@@ -26,15 +28,25 @@ const int powerSwitch = 4;
 const int pressureDivider = A0;
 const int temperatureSensor = 2;
 const int disarmButton = 3;
+const int buzzer = 7;
 
 //TRANSITION VALUES
 float STAGE2RANGE[] = {80.00,81.00}; 
 float STAGE3TEMP = 81.50;
+
 const int pressureThreshold = 300;
-long elapsed;
-long alertStart;
+
+long elapsed = 0;
+long alertStart = 0;
+
+long Stage1Time = 30000L;
+long Stage2Time = 60000L;
+long Stage3Time = 90000L;
+long Stage4Time = 120000L;
+
 
 //BOOLS
+bool inAlert = false;
 bool driverPresent = false;
 bool childDetected = false;
 
@@ -67,14 +79,15 @@ void transitionState() {
 }
 
 void determineNextState() {
+  //might want to switch the case to be around temperature idek
   switch(currentState) {
     case State::IDLE:
-      //if detect baby but not detect driver then
-      nextState = State::STAGE1;
+      if (childDetected && elapsed >= Stage1Time) {
+        nextState = State::STAGE1;
+      }
       break;
     case State::STAGE1:
-      //if still detect baby but not detect driver then
-      if (temperature >= STAGE2RANGE[0]) {
+      if (temperature >= STAGE2RANGE[0] && childDetected && elapsed >= Stage2Time) {
         if (temperature >= STAGE2RANGE[1]) {
           nextState = State::STAGE3;//QUESTION: range is irrelevant if the temp jumps past it,
         }                           //here i have it just skip stages but is that the functionality
@@ -87,8 +100,7 @@ void determineNextState() {
       }
       break;
     case State::STAGE2:
-      //if still detect baby but not detect driver then
-      if (temperature >= STAGE3TEMP) {
+      if (temperature >= STAGE3TEMP && childDetected && elapsed >= Stage3Time) {
         nextState = State::STAGE3;
       }
       else {
@@ -96,17 +108,20 @@ void determineNextState() {
       }
       break;
     case State::STAGE3:
-      //if still detect baby but not detect driver then
-      nextState = State::STAGE4;
+      if (childDetected && elapsed >= Stage4Time) {
+        nextState = State::STAGE4;
+      }
       break;
     case State::STAGE4:
-      //if still detect baby but not detect driver then
-      nextState = State::IDLE;
+      if (!childDetected) {
+        nextState = State::IDLE;
+      }
       break;
   }
-  if (digitalRead(disarmButton) == LOW) {
+  /*if (digitalRead(disarmButton) == LOW) {
     nextState = State::IDLE;
-  }
+    alertStart = 0;
+  }*/
 }
 
 void determineOutputs() {
@@ -114,21 +129,38 @@ void determineOutputs() {
   switch(currentState) {
     case State::IDLE:
       Serial.println("Idle");
+
+      analogWrite(PIN_LED, 0);
+      noTone(buzzer);
       break;
     case State::STAGE1:
       Serial.println("Stage 1");
+
+      // Slow amber pulse — PWM breathe
+      analogWrite(PIN_LED, (millis() / 8) % 255);
+      tone(buzzer, 880, 200);
       break;
     case State::STAGE2:
       Serial.println("Stage 2");
+
+      analogWrite(PIN_LED, 180);
+      tone(buzzer, 1047, 100);
       break;
     case State::STAGE3:
       Serial.println("Stage 3");
+
+      // Rapid strobe
+      analogWrite(PIN_LED, (millis() / 80) % 2 == 0 ? 255 : 0);
+      tone(buzzer, 1500, 50);
       break;
     case State::STAGE4:
       Serial.println("Stage 4");
+
+      analogWrite(PIN_LED, 255);
+      tone(buzzer, 2000, 500);
       break;
   }
-  updateOled()
+  updateOled();
 }
 
 
@@ -141,10 +173,7 @@ void updateOled() {
   oled.print("SafeSeat  Stage ");
   oled.println(currentState);
   oled.print("Temp: ");
-  oled.print(tempC, 1);
-  oled.println(" C");
-  oled.print("HI:   ");
-  oled.print(heatIndex, 1);
+  oled.print(temperature, 1);
   oled.println(" C");
   if (currentState != State::IDLE) {
     oled.println();
@@ -153,43 +182,14 @@ void updateOled() {
   oled.display();
 }
 
-// ── LED + buzzer per stage ────────────────────────────────────────────────────
-void updateOutputs() {
-  switch (currentState) {
-    case State::IDLE:
-      analogWrite(PIN_LED, 0);
-      noTone(PIN_BUZZER);
-      break;
-    case State::STAGE1:
-      // Slow amber pulse — PWM breathe
-      analogWrite(PIN_LED, (millis() / 8) % 255);
-      tone(PIN_BUZZER, 880, 200);
-      break;
-    case State::STAGE2:
-      analogWrite(PIN_LED, 180);
-      tone(PIN_BUZZER, 1047, 100);
-      break;
-    case State::STAGE3:
-      // Rapid strobe
-      analogWrite(PIN_LED, (millis() / 80) % 2 == 0 ? 255 : 0);
-      tone(PIN_BUZZER, 1500, 50);
-      break;
-    case State::STAGE4:
-      analogWrite(PIN_LED, 255);
-      tone(PIN_BUZZER, 2000, 500);
-      break;
-  }
-}
-
-
 // ── JSON payload ──────────────────────────────────────────────────────────────
 String buildJson() {
   String j = "{";
-  j += "\"temp\":"          + String(temperature, 2)      + ",";
-  j += "\"driverPresent\":" + (driverPresent ? "true" : "false") + ",";
-  j += "\"childDetected\":" + (childDetected ? "true" : "false") + ",";
-  j += "\"stage\":"         + String(currentState)     + ",";
-  j += "\"elapsedSecs\":"   + String((currentState != State::IDLE) ? ((millis() - alertStart) / 1000 : 0));
+  j += String("\"temp\":")          + String(temperature, 2)      + ",";
+  j += String("\"driverPresent\":") + (driverPresent ? "true" : "false") + ",";
+  j += String("\"childDetected\":") + (childDetected ? "true" : "false") + ",";
+  j += String("\"stage\":")         + String(currentState)     + ",";
+  j += String("\"elapsedSecs\":")   + ( (currentState != State::IDLE) ? ((millis() - alertStart)/1000) : 0);
   j += "}";
   return j;
 }
@@ -243,9 +243,7 @@ void handleClient(WiFiClient& client) {
   client.println("HTTP/1.1 404 Not Found\r\n\r\n");
 }
 
-bool detectBaby() {
 
-}
 //MAIN FUNCTIONS
 void setup() {
   // put your setup code here, to run once:
@@ -257,7 +255,7 @@ void setup() {
 
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
-  pinMode(disarmButton, INPUT_PULLUP);
+  //pinMode(disarmButton, INPUT_PULLUP);
   Wire.begin(); //Setup for I2C
 
 
@@ -272,7 +270,7 @@ void setup() {
   oled.display();
 
   // WiFi
-  Serial.print("Connecting to WiFi");
+  /*Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -282,7 +280,7 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());  // <── copy this into the app Settings
 
-  server.begin();
+  server.begin(); */
 }
 
 void loop() {
@@ -301,7 +299,13 @@ void loop() {
     if (doc["type"] == 1) {                      // the results message
       sawResults = true;
       JsonArray boxes = doc["data"]["boxes"];
-      if (boxes.size() == 0) { Serial.println("(no person in frame)"); }
+      if (boxes.size() == 0) { 
+        Serial.println("(no person in frame)"); 
+        childDetected = 0;
+      }
+      else {
+        childDetected = 1;
+      }
       for (JsonArray b : boxes) {
         int x=b[0], y=b[1], w=b[2], h=b[3], score=b[4], target=b[5];
         Serial.print("class="); Serial.print(target);
@@ -312,7 +316,10 @@ void loop() {
       }
     }
   }
-  if (!sawResults) Serial.println("no response");
+  if (!sawResults) {
+    childDetected = 0;
+    Serial.println("no response");
+  }
 
 
   temperature = dht.readTemperature(true); //In fahrenheit
@@ -323,22 +330,37 @@ void loop() {
   driverPresent = digitalRead(PIN_PIR) == HIGH;
   */
 
+  if (!inAlert && !driverPresent && currentState == State::IDLE) { //driver just left vehicle
+    alertStart = millis();
+    inAlert = true;
+  }
+
+  if (inAlert) {
+    elapsed = millis() - alertStart;
+  }
+  else {
+    elapsed = 0;
+  }
+
   //State Machine
   determineNextState();
   determineOutputs();
   transitionState();
 
-  int pressureSensorValue = analogRead(pressureDivider);
-  driverPresent = (pressureSensorValue > pressureThreshold);
-  childDetected = driverPresent; //shortcut until AI Module is up
+  
 
+  //int pressureSensorValue = analogRead(pressureDivider);
+  //driverPresent = (pressureSensorValue > pressureThreshold);
+
+  /*
   // ── HTTP server ─────────────────────────────────────────────────────────────
   WiFiClient client = server.available();
   if (client) {
     handleClient(client);
     client.stop();
-  }
+  } */
 
   Serial.println(temperature);
+  Serial.println(elapsed);
   delay(500);
 }
