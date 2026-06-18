@@ -194,6 +194,19 @@ String buildJson() {
   return j;
 }
 
+String readJsonObject(uint32_t timeout_ms) {
+  String s = ""; int depth = 0; bool started = false;
+  uint32_t start = millis();
+  while (millis() - start < timeout_ms) {
+    while (Serial1.available()) {
+      char c = Serial1.read();
+      if (c == '{') { depth++; started = true; }
+      if (started) s += c;
+      if (c == '}' && --depth == 0 && started) return s;
+    }
+  }
+  return "";
+}
 
 // ── HTTP request handler ──────────────────────────────────────────────────────
 void handleClient(WiFiClient& client) {
@@ -239,7 +252,8 @@ void setup() {
   
   //Serial setup
   Serial.begin(115200);
-
+  Serial1.begin(921600);
+  Serial.println("Vision AI ready (raw UART)");
 
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
@@ -274,6 +288,33 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
+  while (Serial1.available()) Serial1.read();   // read stale bytes over and over till they dissapear
+  Serial1.print("AT+INVOKE=1,0,1\r");           // Command camera to take 1 shot, results only, NO image
+
+  //Camera test
+  bool sawResults = false;
+  for (int i = 0; i < 3; i++) {                 // module sends type 0 then type 1
+    String obj = readJsonObject(300);
+    if (obj.length() == 0) break;
+    JsonDocument doc;
+    if (deserializeJson(doc, obj)) continue;
+    if (doc["type"] == 1) {                      // the results message
+      sawResults = true;
+      JsonArray boxes = doc["data"]["boxes"];
+      if (boxes.size() == 0) { Serial.println("(no person in frame)"); }
+      for (JsonArray b : boxes) {
+        int x=b[0], y=b[1], w=b[2], h=b[3], score=b[4], target=b[5];
+        Serial.print("class="); Serial.print(target);
+        Serial.print(" score="); Serial.print(score);
+        Serial.print(" @("); Serial.print(x); Serial.print(",");
+        Serial.print(y); Serial.print(") ");
+        Serial.print(w); Serial.print("x"); Serial.println(h);
+      }
+    }
+  }
+  if (!sawResults) Serial.println("no response");
+
+
   temperature = dht.readTemperature(true); //In fahrenheit
   
   /*
@@ -282,6 +323,7 @@ void loop() {
   driverPresent = digitalRead(PIN_PIR) == HIGH;
   */
 
+  //State Machine
   determineNextState();
   determineOutputs();
   transitionState();
