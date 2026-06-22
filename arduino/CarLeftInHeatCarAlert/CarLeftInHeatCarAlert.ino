@@ -39,13 +39,14 @@ const int pressureThreshold = 300;
 long elapsed = 0;
 long alertStart = 0;
 
+//30s, 60s, 90s, 120s respectively, in milliseconds
 long Stage1Time = 30000L;
 long Stage2Time = 60000L;
 long Stage3Time = 90000L;
 long Stage4Time = 120000L;
 
 
-//BOOLS
+//BOOLEANS
 bool inAlert = false;
 bool driverPresent = false;
 bool childDetected = false;
@@ -65,7 +66,7 @@ State nextState;
 
 float temperature;
 
-//Initialize Libraries/Parts or whatever
+//Initialize Classes for Component Libraries
 DHT dht(temperatureSensor,DHT22);
 SSCMA AI;
 WiFiServer server(80);
@@ -75,11 +76,12 @@ Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 
 //STATE MACHINE
 void transitionState() {
+  //Go from current state to the pre-selected next state
   currentState = nextState;
 }
 
 void determineNextState() {
-  //might want to switch the case to be around temperature idek
+  //decide the next state based on the current state/time/temperature
   switch(currentState) {
     case State::IDLE:
       if (childDetected && elapsed >= Stage1Time) {
@@ -89,9 +91,9 @@ void determineNextState() {
     case State::STAGE1:
       if (temperature >= STAGE2RANGE[0] && childDetected && elapsed >= Stage2Time) {
         if (temperature >= STAGE2RANGE[1]) {
-          nextState = State::STAGE3;//QUESTION: range is irrelevant if the temp jumps past it,
-        }                           //here i have it just skip stages but is that the functionality
-        else {                      //that we want?
+          nextState = State::STAGE3;
+        }                           
+        else {                      
           nextState = State::STAGE2;
         }
       }
@@ -118,14 +120,15 @@ void determineNextState() {
       }
       break;
   }
-  /*if (digitalRead(disarmButton) == LOW) {
+  /*if (digitalRead(disarmButton) == LOW) { //This button hasnt been integrated yet, we need to solder it
     nextState = State::IDLE;
     alertStart = 0;
   }*/
 }
 
 void determineOutputs() {
-  // all the warning stuff would go here
+  //Determine the outputs (LED, OLED, Sound) depending on the current state
+  // all the warning LED/OLED stuff would go here
   switch(currentState) {
     case State::IDLE:
       Serial.println("Idle");
@@ -182,7 +185,7 @@ void updateOled() {
   oled.display();
 }
 
-// ── JSON payload ──────────────────────────────────────────────────────────────
+// ── Create JSON string for the dashboard website ───────────────────────────────
 String buildJson() {
   String j = "{";
   j += String("\"temp\":")          + String(temperature, 2)      + ",";
@@ -195,6 +198,7 @@ String buildJson() {
 }
 
 String readJsonObject(uint32_t timeout_ms) {
+  //Read JSON data provided by the AI Camera Module
   String s = ""; int depth = 0; bool started = false;
   uint32_t start = millis();
   while (millis() - start < timeout_ms) {
@@ -269,7 +273,7 @@ void setup() {
   oled.clearDisplay();
   oled.display();
 
-  // WiFi
+  // WiFi, not integrated yet
   /*Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
@@ -289,9 +293,9 @@ void loop() {
   while (Serial1.available()) Serial1.read();   // read stale bytes over and over till they dissapear
   Serial1.print("AT+INVOKE=1,0,1\r");           // Command camera to take 1 shot, results only, NO image
 
-  //Camera test
+  //Read the json from the module, see if it detected anything, determine if a child was detected
   bool sawResults = false;
-  for (int i = 0; i < 3; i++) {                 // module sends type 0 then type 1
+  for (int i = 0; i < 3; i++) {                 // module sends type 0 then type = 1
     String obj = readJsonObject(300);
     if (obj.length() == 0) break;
     JsonDocument doc;
@@ -323,19 +327,13 @@ void loop() {
 
 
   temperature = dht.readTemperature(true); //In fahrenheit
-  
-  /*
-  int fsrRaw  = analogRead(PIN_FSR);
-  seatOccupied  = fsrRaw > FSR_THRESHOLD;
-  driverPresent = digitalRead(PIN_PIR) == HIGH;
-  */
 
   if (!inAlert && !driverPresent && currentState == State::IDLE) { //driver just left vehicle
     alertStart = millis();
     inAlert = true;
   }
 
-  if (inAlert) {
+  if (inAlert) {//Set the "time spent in alert" variable
     elapsed = millis() - alertStart;
   }
   else {
@@ -348,7 +346,7 @@ void loop() {
   transitionState();
 
   
-
+  //has not been integrated yet
   //int pressureSensorValue = analogRead(pressureDivider);
   //driverPresent = (pressureSensorValue > pressureThreshold);
 
