@@ -31,20 +31,15 @@ const int disarmButton = 3;
 const int buzzer = 7;
 
 //TRANSITION VALUES
-float STAGE2RANGE[] = {80.00,81.00}; 
-float STAGE3TEMP = 81.50;
+float transitionTemperature[] = {0,0,71.00,72.00,73.00}; 
 
-const int pressureThreshold = 300;
+const int pressureThreshold = 900;
 
 long elapsed = 0;
 long alertStart = 0;
 
-//30s, 60s, 90s, 120s respectively, in milliseconds
-long Stage1Time = 30000L;
-long Stage2Time = 60000L;
-long Stage3Time = 90000L;
-long Stage4Time = 120000L;
-
+//10s,15s,30s,45s respectively, in milliseconds
+long transitionTime[] = {0,10000L,15000L,30000L,45000L};
 
 //BOOLEANS
 bool inAlert = false;
@@ -60,6 +55,8 @@ enum State {
   STAGE4
 };
 
+const char* StateNames[] = {"Idle","Stage 1","Stage 2","Stage 3","Stage 4"};
+ 
 //Initial State for the State Machine
 State currentState;
 State nextState;
@@ -78,19 +75,31 @@ Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 void transitionState() {
   //Go from current state to the pre-selected next state
   currentState = nextState;
+
+  //manage time
+  if (!inAlert) {
+    if (!driverPresent) {
+      inAlert = true;
+    }
+  }
+  else {
+    if (currentState == State::IDLE) {
+      inAlert = false;
+    }
+  }
 }
 
 void determineNextState() {
   //decide the next state based on the current state/time/temperature
   switch(currentState) {
     case State::IDLE:
-      if (childDetected && elapsed >= Stage1Time) {
+      if (childDetected && elapsed >= transitionTime[1]) {
         nextState = State::STAGE1;
       }
       break;
     case State::STAGE1:
-      if (temperature >= STAGE2RANGE[0] && childDetected && elapsed >= Stage2Time) {
-        if (temperature >= STAGE2RANGE[1]) {
+      if (temperature >= transitionTemperature[2] && childDetected && elapsed >= transitionTime[2]) {
+        if (temperature >= transitionTemperature[3]) {
           nextState = State::STAGE3;
         }                           
         else {                      
@@ -102,7 +111,7 @@ void determineNextState() {
       }
       break;
     case State::STAGE2:
-      if (temperature >= STAGE3TEMP && childDetected && elapsed >= Stage3Time) {
+      if (temperature >= transitionTemperature[3] && childDetected && elapsed >=  transitionTime[3]) {
         nextState = State::STAGE3;
       }
       else {
@@ -110,19 +119,19 @@ void determineNextState() {
       }
       break;
     case State::STAGE3:
-      if (childDetected && elapsed >= Stage4Time) {
+      if (childDetected && elapsed >=  transitionTime[4]) {
         nextState = State::STAGE4;
       }
       break;
     case State::STAGE4:
-      if (!childDetected) {
+      if (!childDetected && temperature >= transitionTemperature[4]) {
         nextState = State::IDLE;
       }
       break;
   }
+
   /*if (digitalRead(disarmButton) == LOW) { //This button hasnt been integrated yet, we need to solder it
     nextState = State::IDLE;
-    alertStart = 0;
   }*/
 }
 
@@ -173,15 +182,31 @@ void updateOled() {
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
   oled.setCursor(0, 0);
-  oled.print("SafeSeat  Stage ");
-  oled.println(currentState);
+
+  oled.print("SafeSeat ");
+  oled.println(StateNames[currentState]);
+  
   oled.print("Temp: ");
   oled.print(temperature, 1);
-  oled.println(" C");
+  oled.println(" F");
+
+
+  //Diagnostic displays
+  if (childDetected) {
+    oled.println("Child detected");
+  }  
+
+  if (!driverPresent) {
+    oled.println("Driver NOT detected");
+  }
+
   if (currentState != State::IDLE) {
     oled.println();
     oled.println("!! CHILD IN VEHICLE");
+  
   }
+
+
   oled.display();
 }
 
@@ -287,6 +312,18 @@ void setup() {
   server.begin(); */
 }
 
+/*
+Reasons to reset stages:
+-Temp drops
+-Driver returns
+-Disarm pressed
+
+Impact of such
+-Reset Timer
+-Set in-alert to false
+
+
+*/
 void loop() {
   // put your main code here, to run repeatedly:
 
@@ -325,30 +362,23 @@ void loop() {
     Serial.println("no response");
   }
 
+  //Detect Driver
+  int pressureSensorValue = analogRead(pressureDivider);
+  driverPresent = (pressureSensorValue < pressureThreshold);
 
   temperature = dht.readTemperature(true); //In fahrenheit
 
-  if (!inAlert && !driverPresent && currentState == State::IDLE) { //driver just left vehicle
-    alertStart = millis();
-    inAlert = true;
-  }
-
-  if (inAlert) {//Set the "time spent in alert" variable
+  if (inAlert && !driverPresent) {//Set the "time spent in alert" variable
     elapsed = millis() - alertStart;
   }
   else {
-    elapsed = 0;
+    //elapsed = 0;
   }
 
   //State Machine
   determineNextState();
   determineOutputs();
   transitionState();
-
-  
-  //has not been integrated yet
-  //int pressureSensorValue = analogRead(pressureDivider);
-  //driverPresent = (pressureSensorValue > pressureThreshold);
 
   /*
   // ── HTTP server ─────────────────────────────────────────────────────────────
@@ -358,6 +388,7 @@ void loop() {
     client.stop();
   } */
 
+  Serial.println(inAlert);
   Serial.println(temperature);
   Serial.println(elapsed);
   delay(500);
