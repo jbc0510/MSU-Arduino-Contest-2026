@@ -330,7 +330,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, RISING);
 
   // WiFi, not integrated yet
-  /*Serial.print("Connecting to WiFi");
+  Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -340,7 +340,7 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());  // <── copy this into the app Settings
 
-  server.begin(); */
+  server.begin(); 
 }
 
 void loop() {
@@ -406,13 +406,13 @@ void loop() {
   determineNextState();
   determineOutputs();
 
-  /*
+  
   // ── HTTP server ─────────────────────────────────────────────────────────────
   WiFiClient client = server.available();
   if (client) {
     handleClient(client);
     client.stop();
-  } */
+  } 
 
   Serial.println(temperature);
   Serial.println(elapsed);
