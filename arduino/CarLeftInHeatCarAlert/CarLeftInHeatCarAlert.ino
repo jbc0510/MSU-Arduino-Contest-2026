@@ -31,17 +31,16 @@ const int disarmButton = 3;
 const int buzzer = 7;
 
 //TRANSITION VALUES
-float transitionTemperature[] = {0,0,71.00,72.00,73.00}; 
+float transitionTemperature[] = { 0, 0, 71.00, 72.00, 73.00 };
 //10s,15s,30s,45s respectively, in milliseconds
-long transitionTime[] = {0,10000L,15000L,30000L,45000L};
+long transitionTime[] = { 0, 10000L, 15000L, 30000L, 45000L };
 
 
 float temperature;
 const int pressureThreshold = 900;
 
-long elapsed = 73;
-//long alertStart = 0;
-long driverLeft = 0;
+unsigned long elapsed = 73;
+unsigned long driverLeft = 0;
 
 //BOOLEANS
 bool inAlert = false;
@@ -56,7 +55,7 @@ enum State {
   STAGE3,
   STAGE4
 };
-const char* StateNames[] = {"Idle","Stage 1","Stage 2","Stage 3","Stage 4"};
+const char* StateNames[] = { "Idle", "Stage 1", "Stage 2", "Stage 3", "Stage 4" };
 //Initial State for the State Machine
 State currentState;
 State nextState;
@@ -67,7 +66,7 @@ volatile bool queueDisarm = false;
 volatile long lastPress = 0;
 
 //Initialize Classes for Component Libraries
-DHT dht(temperatureSensor,DHT22);
+DHT dht(temperatureSensor, DHT22);
 SSCMA AI;
 WiFiServer server(80);
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
@@ -76,17 +75,16 @@ Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 
 //STATE MACHINE
 void transitionState() {
-  
-  //manage time 
-  if (driverLeft == 0) {//Potential bug: false alarms with the drive reset entire system
+
+  //manage time
+  if (driverLeft == 0) {  //Potential bug: false alarms with the drive reset entire system
     if (!driverPresent) {
       driverLeft = millis();
     }
     /*else {
       driverLeft = 0;
     }*/
-  }
-  else {
+  } else {
     /*if (driverPresent) {
       driverLeft = 0;
       queueDisarm = true;
@@ -100,11 +98,10 @@ void transitionState() {
     nextState = State::IDLE;
   }
 
-  if (currentState == State::IDLE && nextState != State::IDLE) { //Entering Alert State
+  if (currentState == State::IDLE && nextState != State::IDLE) {  //Entering Alert State
     inAlert = true;
     Serial.println("Enter alert");
-  }
-  else if (currentState != State::IDLE && nextState == State::IDLE) { //Leaving Alert State
+  } else if (currentState != State::IDLE && nextState == State::IDLE) {  //Leaving Alert State
     inAlert = false;
     Serial.println("Exit alert");
   }
@@ -115,7 +112,7 @@ void transitionState() {
 
 void determineNextState() {
   //decide the next state based on the current state/time/temperature
-  switch(currentState) {
+  switch (currentState) {
     case State::IDLE:
       if (childDetected && elapsed >= transitionTime[1]) {
         nextState = State::STAGE1;
@@ -125,28 +122,24 @@ void determineNextState() {
       if (temperature >= transitionTemperature[2] && childDetected && elapsed >= transitionTime[2]) {
         if (temperature >= transitionTemperature[3]) {
           nextState = State::STAGE3;
-        }                           
-        else {                      
+        } else {
           nextState = State::STAGE2;
         }
-      }
-      else {
+      } else {
         nextState = State::STAGE1;
       }
       break;
     case State::STAGE2:
-      if (temperature >= transitionTemperature[3] && childDetected && elapsed >=  transitionTime[3]) {
+      if (temperature >= transitionTemperature[3] && childDetected && elapsed >= transitionTime[3]) {
         nextState = State::STAGE3;
-      }
-      else {
+      } else {
         nextState = State::STAGE2;
       }
       break;
     case State::STAGE3:
-      if (childDetected && elapsed >=  transitionTime[4]) {
+      if (childDetected && elapsed >= transitionTime[4]) {
         nextState = State::STAGE4;
-      }
-      else {
+      } else {
         nextState = State::STAGE3;
       }
       break;
@@ -160,7 +153,7 @@ void determineNextState() {
 void determineOutputs() {
   //Determine the outputs (LED, OLED, Sound) depending on the current state
   // all the warning LED/OLED stuff would go here
-  switch(currentState) {
+  switch (currentState) {
     case State::IDLE:
       Serial.println("Idle");
 
@@ -206,7 +199,7 @@ void updateOled() {
 
   oled.print("SafeSeat ");
   oled.println(StateNames[currentState]);
-  
+
   oled.print("Temp: ");
   oled.print(temperature, 1);
   oled.println(" F");
@@ -215,7 +208,7 @@ void updateOled() {
   //Diagnostic displays
   if (childDetected) {
     oled.println("Child detected");
-  }  
+  }
 
   if (!driverPresent) {
     oled.println("Driver NOT detected");
@@ -224,7 +217,6 @@ void updateOled() {
   if (currentState != State::IDLE) {
     oled.println();
     oled.println("!! CHILD IN VEHICLE");
-  
   }
   oled.display();
 }
@@ -232,23 +224,28 @@ void updateOled() {
 // ── Create JSON string for the dashboard website ───────────────────────────────
 String buildJson() {
   String j = "{";
-  j += String("\"temp\":")          + String(temperature, 2)      + ",";
+  j += String("\"temp\":") + String(temperature, 2) + ",";
   j += String("\"driverPresent\":") + (driverPresent ? "true" : "false") + ",";
   j += String("\"childDetected\":") + (childDetected ? "true" : "false") + ",";
-  j += String("\"stage\":")         + String(currentState)     + ",";
-  j += String("\"elapsedSecs\":")   + ( (currentState != State::IDLE) ? ((elapsed)/1000) : 0);
+  j += String("\"stage\":") + String(currentState) + ",";
+  j += String("\"elapsedSecs\":") + ((currentState != State::IDLE) ? ((elapsed) / 1000) : 0);
   j += "}";
   return j;
 }
 
 String readJsonObject(uint32_t timeout_ms) {
   //Read JSON data provided by the AI Camera Module
-  String s = ""; int depth = 0; bool started = false;
+  String s = "";
+  int depth = 0;
+  bool started = false;
   uint32_t start = millis();
   while (millis() - start < timeout_ms) {
     while (Serial1.available()) {
       char c = Serial1.read();
-      if (c == '{') { depth++; started = true; }
+      if (c == '{') {
+        depth++;
+        started = true;
+      }
       if (started) s += c;
       if (c == '}' && --depth == 0 && started) return s;
     }
@@ -266,10 +263,10 @@ void handleClient(WiFiClient& client) {
   }
 
   bool isStatus = req.indexOf("GET /status") >= 0;
-  bool isAck    = req.indexOf("POST /ack")   >= 0;
+  bool isAck = req.indexOf("POST /ack") >= 0;
 
   if (isAck) {
-    currentState    = State::IDLE;
+    currentState = State::IDLE;
     //driverPresent = true; dont really want to force driver present on reset
     client.println("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nok");
     return;
@@ -297,7 +294,7 @@ void whenTurnedOn() {
 }
 
 void onButtonPress() {
-  if ((millis() - lastPress) > 50) {//debounce
+  if ((millis() - lastPress) > 50) {  //debounce
     queueDisarm = true;
     lastPress = millis();
   }
@@ -306,7 +303,7 @@ void onButtonPress() {
 //MAIN FUNCTIONS
 void setup() {
   // put your setup code here, to run once:
-  
+
   //Serial setup
   Serial.begin(115200);
   Serial1.begin(921600);
@@ -315,12 +312,12 @@ void setup() {
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
   pinMode(disarmButton, INPUT_PULLDOWN);
-  Wire.begin(); //Setup for I2C
+  Wire.begin();  //Setup for I2C
 
 
   //Sensor Setup
   dht.begin();
-  AI.begin(&Wire); //Begin the AI Module getting info through the I2C port
+  AI.begin(&Wire);  //Begin the AI Module getting info through the I2C port
   //OLED
   if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println("SSD1306 not found");
@@ -329,8 +326,8 @@ void setup() {
   oled.display();
 
   //Interrupts
-  attachInterrupt(digitalPinToInterrupt(powerSwitch),whenTurnedOn,RISING);
-  attachInterrupt(digitalPinToInterrupt(disarmButton),onButtonPress,RISING);
+  attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, RISING);
+  attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, RISING);
 
   // WiFi, not integrated yet
   /*Serial.print("Connecting to WiFi");
@@ -356,34 +353,40 @@ void loop() {
     elapsed = 0;
   } */
 
-  
-  while (Serial1.available()) Serial1.read();   // read stale bytes over and over till they dissapear
-  Serial1.print("AT+INVOKE=1,0,1\r");           // Command camera to take 1 shot, results only, NO image
+
+  while (Serial1.available()) Serial1.read();  // read stale bytes over and over till they dissapear
+  Serial1.print("AT+INVOKE=1,0,1\r");          // Command camera to take 1 shot, results only, NO image
 
   //Read the json from the module, see if it detected anything, determine if a child was detected
   bool sawResults = false;
-  for (int i = 0; i < 3; i++) {                 // module sends type 0 then type = 1
+  JsonDocument doc;
+  for (int i = 0; i < 3; i++) {  // module sends type 0 then type = 1
     String obj = readJsonObject(30);
     if (obj.length() == 0) break;
-    JsonDocument doc;
     if (deserializeJson(doc, obj)) continue;
-    if (doc["type"] == 1) {                      // the results message
+    if (doc["type"] == 1) {  // the results message
       sawResults = true;
       JsonArray boxes = doc["data"]["boxes"];
-      if (boxes.size() == 0) { 
-        Serial.println("(no person in frame)"); 
+      if (boxes.size() == 0) {
+        Serial.println("(no person in frame)");
         childDetected = 0;
-      }
-      else {
+      } else {
         childDetected = 1;
       }
       for (JsonArray b : boxes) {
-        int x=b[0], y=b[1], w=b[2], h=b[3], score=b[4], target=b[5];
-        Serial.print("class="); Serial.print(target);
-        Serial.print(" score="); Serial.print(score);
-        Serial.print(" @("); Serial.print(x); Serial.print(",");
-        Serial.print(y); Serial.print(") ");
-        Serial.print(w); Serial.print("x"); Serial.println(h);
+        int x = b[0], y = b[1], w = b[2], h = b[3], score = b[4], target = b[5];
+        Serial.print("class=");
+        Serial.print(target);
+        Serial.print(" score=");
+        Serial.print(score);
+        Serial.print(" @(");
+        Serial.print(x);
+        Serial.print(",");
+        Serial.print(y);
+        Serial.print(") ");
+        Serial.print(w);
+        Serial.print("x");
+        Serial.println(h);
       }
     }
   }
@@ -396,7 +399,7 @@ void loop() {
   int pressureSensorValue = analogRead(pressureDivider);
   driverPresent = (pressureSensorValue < pressureThreshold);
 
-  temperature = dht.readTemperature(true); //In fahrenheit
+  temperature = dht.readTemperature(true);  //In fahrenheit
 
   //State Machine
   transitionState();
@@ -411,7 +414,7 @@ void loop() {
     client.stop();
   } */
 
-  Serial.println(pressureSensorValue);
   Serial.println(temperature);
   Serial.println(elapsed);
+  delay(500);
 }
