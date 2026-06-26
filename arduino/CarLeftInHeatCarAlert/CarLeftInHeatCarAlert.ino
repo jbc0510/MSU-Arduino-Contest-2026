@@ -359,10 +359,10 @@ void loop() {
 
   //Read the json from the module, see if it detected anything, determine if a child was detected
   bool sawResults = false;
-  JsonDocument doc;
   for (int i = 0; i < 3; i++) {  // module sends type 0 then type = 1
-    String obj = readJsonObject(30);
+    String obj = readJsonObject(300);
     if (obj.length() == 0) break;
+    JsonDocument doc;
     if (deserializeJson(doc, obj)) continue;
     if (doc["type"] == 1) {  // the results message
       sawResults = true;
