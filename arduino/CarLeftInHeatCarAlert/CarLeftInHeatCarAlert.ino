@@ -29,6 +29,7 @@ const int pressureDivider = A0;
 const int temperatureSensor = 2;
 const int disarmButton = 3;
 const int buzzer = 7;
+const int PIN_LED = 8;
 
 //TRANSITION VALUES
 float transitionTemperature[] = { 0, 0, 71.00, 72.00, 73.00 };
