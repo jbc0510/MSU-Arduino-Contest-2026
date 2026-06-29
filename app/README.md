@@ -2,6 +2,16 @@
 
 Child-in-vehicle monitoring dashboard with push notifications for the Arduino Uno R4 WiFi system.
 
+** How to setup virtual environment for Node.js
+1. Install "nodeenv" library using pip (python package manager)
+  -pip install nodeenv
+2. Create a virtual environment 
+  -nodeenv <name_of_environment>
+3. activate the virtual environment
+  -./<name_of_environment>/Scripts/activate (assuming you are in the directory the environment is in)
+4. Enter the directory for the "app" folder
+  -cd app
+5. Run the following commands vvv
 ## Quick start
 
 ```bash
@@ -13,14 +23,16 @@ npx expo start
 ## Project structure
 
 ```
-App.tsx                       → Root: navigation + providers
-src/
-  hooks/useSafeSeat.ts        → Central state: sensors, alert stage, event log
-  screens/DashboardScreen.tsx → Main monitoring view
-  screens/AlertsScreen.tsx    → Notification log + escalation timeline
-  screens/SettingsScreen.tsx  → Device config, emergency contact, Twilio
-  utils/theme.ts              → Colors, spacing, stage metadata
-CarLeftInHeatCarAlert.ino   → Arduino R4 firmware
+app/
+  App.tsx                       → Root: navigation + providers
+  src/
+    hooks/useSafeSeat.ts        → Central state: sensors, alert stage, event log
+    screens/DashboardScreen.tsx → Main monitoring view
+    screens/AlertsScreen.tsx    → Notification log + escalation timeline
+    screens/SettingsScreen.tsx  → Device config, emergency contact, Twilio
+    utils/theme.ts              → Colors, spacing, stage metadata
+arduino/
+  CarLeftInHeatCarAlert.ino   → Arduino R4 firmware
 ```
 
 ## Connecting to the Arduino R4
