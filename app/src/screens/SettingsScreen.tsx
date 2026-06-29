@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADIUS, SPACING } from '../utils/theme';
+import { useSafeSeat } from '../hooks/useSafeSeat'; // Import hook
 
 function SettingRow({
   label,
@@ -37,8 +38,10 @@ function SectionCard({ children }: { children: React.ReactNode }) {
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  
+  // Consume elevated global state values directly from React Context
+  const { arduinoIp, setArduinoIp } = useSafeSeat();
 
-  const [arduinoIp, setArduinoIp] = useState('192.168.1.100');
   const [pollInterval, setPollInterval] = useState('2');
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [emergencyName, setEmergencyName] = useState('');
@@ -73,8 +76,8 @@ export default function SettingsScreen() {
           right={
             <TextInput
               style={styles.input}
-              value={arduinoIp}
-              onChangeText={setArduinoIp}
+              value={arduinoIp}            // Maps to context value
+              onChangeText={setArduinoIp}  // Updates context value on change
               placeholder="192.168.x.x"
               placeholderTextColor={COLORS.muted}
               keyboardType="decimal-pad"

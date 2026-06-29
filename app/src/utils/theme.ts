@@ -66,6 +66,8 @@ export interface SensorData {
   temp: number;       // °C
   humidity: number;   // %
   heatIndex: number;  // °C feels-like
+  elapsedSecs: number;
+  stage: number;
   pressure: boolean;  // seat occupied
   driverPresent: boolean;
   childDetected: boolean;

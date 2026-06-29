@@ -189,16 +189,16 @@ export default function DashboardScreen() {
           <SensorRow
             icon="👶"
             iconBg={COLORS.mint}
-            label="Vision AI – Child Detection"
-            value={sensors.childDetected ? 'Child detected' : 'Monitoring'}
+            label="Child Detection (Vision AI)"
+            value={sensors.childDetected ? 'Child detected' : 'Child not detected'}
             active={true}
           />
           <View style={styles.divider} />
           <SensorRow
             icon="🚶"
             iconBg={COLORS.peach}
-            label="Driver Presence (PIR)"
-            value={sensors.driverPresent ? 'Present' : 'Monitoring'}
+            label="Driver Presence"
+            value={sensors.driverPresent ? 'Present' : 'Not detected'}
             active={true}
           />
           <View style={styles.divider} />

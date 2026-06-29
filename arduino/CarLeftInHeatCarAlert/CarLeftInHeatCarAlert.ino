@@ -15,13 +15,13 @@ Adafruit BusIO 1.17.4
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFiS3.h>
-
+#include "arduino_secrets.h"
 
 // GLOBAL VARIABLES
 
 //WIFI CREDENTIALS
-const char* WIFI_SSID = "YOUR_SSID";
-const char* WIFI_PASS = "YOUR_PASSWORD";
+const char* WIFI_SSID = SECRET_SSID;
+const char* WIFI_PASS = SECRET_PASS;
 
 //PINS
 const int powerSwitch = 4;
@@ -29,7 +29,7 @@ const int pressureDivider = A0;
 const int temperatureSensor = 2;
 const int disarmButton = 3;
 const int buzzer = 7;
-const int PIN_LED = 8;
+const int pinLED = 11;
 
 //TRANSITION VALUES
 float transitionTemperature[] = { 0, 0, 71.00, 72.00, 73.00 };
@@ -96,6 +96,7 @@ void transitionState() {
   if (queueDisarm == true) {
     queueDisarm = false;
     driverLeft = 0;
+    elapsed = 0;
     nextState = State::IDLE;
   }
 
@@ -158,33 +159,33 @@ void determineOutputs() {
     case State::IDLE:
       Serial.println("Idle");
 
-      analogWrite(PIN_LED, 0);
+      analogWrite(pinLED, 0);
       noTone(buzzer);
       break;
     case State::STAGE1:
       Serial.println("Stage 1");
 
       // Slow amber pulse — PWM breathe
-      analogWrite(PIN_LED, (millis() / 8) % 255);
+      analogWrite(pinLED, (millis() / 8) % 255);
       tone(buzzer, 880, 200);
       break;
     case State::STAGE2:
       Serial.println("Stage 2");
 
-      analogWrite(PIN_LED, 180);
+      analogWrite(pinLED, 180);
       tone(buzzer, 1047, 100);
       break;
     case State::STAGE3:
       Serial.println("Stage 3");
 
       // Rapid strobe
-      analogWrite(PIN_LED, (millis() / 80) % 2 == 0 ? 255 : 0);
+      analogWrite(pinLED, (millis() / 80) % 2 == 0 ? 255 : 0);
       tone(buzzer, 1500, 50);
       break;
     case State::STAGE4:
       Serial.println("Stage 4");
 
-      analogWrite(PIN_LED, 255);
+      analogWrite(pinLED, 255);
       tone(buzzer, 2000, 500);
       break;
   }
@@ -267,9 +268,13 @@ void handleClient(WiFiClient& client) {
   bool isAck = req.indexOf("POST /ack") >= 0;
 
   if (isAck) {
-    currentState = State::IDLE;
-    //driverPresent = true; dont really want to force driver present on reset
-    client.println("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nok");
+    queueDisarm = true;
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: text/plain");
+    client.println("Access-Control-Allow-Origin: *");
+    client.println("Connection: close");
+    client.println();
+    client.println("ok");
     return;
   }
 
@@ -312,7 +317,7 @@ void setup() {
 
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
-  pinMode(disarmButton, INPUT_PULLDOWN);
+  pinMode(disarmButton, INPUT_PULLUP);
   Wire.begin();  //Setup for I2C
 
 
@@ -328,7 +333,7 @@ void setup() {
 
   //Interrupts
   attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, RISING);
-  attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, RISING);
+  attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, FALLING);
 
   // WiFi, not integrated yet
   Serial.print("Connecting to WiFi");
@@ -350,9 +355,9 @@ void loop() {
   if (driverLeft != 0) {
     elapsed = millis() - driverLeft;
   }
-  /*else {
+  else {
     elapsed = 0;
-  } */
+  }
 
 
   while (Serial1.available()) Serial1.read();  // read stale bytes over and over till they dissapear
@@ -415,7 +420,7 @@ void loop() {
     client.stop();
   } 
 
-  Serial.println(temperature);
-  Serial.println(elapsed);
+  //Serial.println(temperature);
+  //Serial.println(elapsed);
   delay(500);
 }
