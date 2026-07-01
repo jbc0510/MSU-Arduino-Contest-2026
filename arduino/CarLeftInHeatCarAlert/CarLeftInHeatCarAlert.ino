@@ -33,7 +33,7 @@ const int pinLED = 11;
 
 //TRANSITION VALUES
 float transitionTemperature[] = { 0, 0, 71.00, 72.00, 73.00 };
-//10s,15s,30s,45s respectively, in milliseconds
+//in milliseconds
 long transitionTime[] = { 0, 10000L, 15000L, 30000L, 45000L };
 
 
@@ -78,18 +78,18 @@ Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 void transitionState() {
 
   //manage time
-  if (driverLeft == 0) {  //Potential bug: false alarms with the drive reset entire system
-    if (!driverPresent) {
+  if (driverLeft == 0) {  //Potential bug: false alarms with the driver reset entire system
+    if (!driverPresent) {//reset driverLeft with changes in driverPresent
       driverLeft = millis();
     }
-    /*else {
+    else {//redundancy
       driverLeft = 0;
-    }*/
-  } else {
-    /*if (driverPresent) {
+    }
+  } else { //driverLeft is a timestamp, driver is gone
+    if (driverPresent) { //driver is present but the timer is still going
       driverLeft = 0;
       queueDisarm = true;
-    }*/
+    }
   }
 
   //manage resets
@@ -121,7 +121,7 @@ void determineNextState() {
       }
       break;
     case State::STAGE1:
-      if (temperature >= transitionTemperature[2] && childDetected && elapsed >= transitionTime[2]) {
+      if (childDetected && elapsed >= transitionTime[2] && temperature >= transitionTemperature[2]) {
         if (temperature >= transitionTemperature[3]) {
           nextState = State::STAGE3;
         } else {
@@ -132,7 +132,7 @@ void determineNextState() {
       }
       break;
     case State::STAGE2:
-      if (temperature >= transitionTemperature[3] && childDetected && elapsed >= transitionTime[3]) {
+      if (childDetected && elapsed >= transitionTime[3] && temperature >= transitionTemperature[3]) {
         nextState = State::STAGE3;
       } else {
         nextState = State::STAGE2;
@@ -146,7 +146,6 @@ void determineNextState() {
       }
       break;
     case State::STAGE4:
-      Serial.println("Stage 4");
       nextState = State::STAGE4;
       break;
   }
@@ -154,37 +153,33 @@ void determineNextState() {
 
 void determineOutputs() {
   //Determine the outputs (LED, OLED, Sound) depending on the current state
-  // all the warning LED/OLED stuff would go here
   switch (currentState) {
     case State::IDLE:
-      Serial.println("Idle");
-
+      //Serial.println("Idle");
       analogWrite(pinLED, 0);
       noTone(buzzer);
       break;
     case State::STAGE1:
-      Serial.println("Stage 1");
+      //Serial.println("Stage 1");
 
       // Slow amber pulse — PWM breathe
       analogWrite(pinLED, (millis() / 8) % 255);
       tone(buzzer, 880, 200);
       break;
     case State::STAGE2:
-      Serial.println("Stage 2");
-
+      //Serial.println("Stage 2");
       analogWrite(pinLED, 180);
       tone(buzzer, 1047, 100);
       break;
     case State::STAGE3:
-      Serial.println("Stage 3");
+      //Serial.println("Stage 3");
 
       // Rapid strobe
       analogWrite(pinLED, (millis() / 80) % 2 == 0 ? 255 : 0);
       tone(buzzer, 1500, 50);
       break;
     case State::STAGE4:
-      Serial.println("Stage 4");
-
+      //Serial.println("Stage 4");
       analogWrite(pinLED, 255);
       tone(buzzer, 2000, 500);
       break;
@@ -201,6 +196,16 @@ void updateOled() {
 
   oled.print("SafeSeat ");
   oled.println(StateNames[currentState]);
+
+  oled.print("IP: ");
+  if (WiFi.status() == WL_CONNECTED) {
+      oled.println(WiFi.localIP());
+  }
+  else 
+  {
+    oled.setTextColor(SSD1306_BLACK,SSD1306_WHITE);
+    oled.println("DISCONNECTED");
+  }
 
   oled.print("Temp: ");
   oled.print(temperature, 1);
