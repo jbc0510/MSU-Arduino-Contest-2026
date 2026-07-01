@@ -50,7 +50,7 @@ export default function SettingsScreen() {
   const [twilioFrom, setTwilioFrom] = useState('');
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(true);
-  const [heatGate, setHeatGate] = useState('38');
+  const [heatGate, setHeatGate] = useState('88');
   const [saved, setSaved] = useState(false);
 
   function save() {

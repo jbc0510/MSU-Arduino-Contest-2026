@@ -32,9 +32,9 @@ const int buzzer = 7;
 const int pinLED = 11;
 
 //TRANSITION VALUES
-float transitionTemperature[] = { 0, 0, 71.00, 72.00, 73.00 };
+float transitionTemperature[] = { 0, 0, 82.00, 85.00, 88.00 };
 //in milliseconds
-long transitionTime[] = { 0, 10000L, 15000L, 30000L, 45000L };
+long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 
 
 float temperature;
@@ -61,6 +61,9 @@ const char* StateNames[] = { "Idle", "Stage 1", "Stage 2", "Stage 3", "Stage 4" 
 State currentState;
 State nextState;
 
+// WiFi Connection
+const int maxConnectionAttempts = 20;
+
 //VARIABLES USED IN INTERRUPTS
 volatile bool onStatus = false;
 volatile bool queueDisarm = false;
@@ -83,11 +86,12 @@ void transitionState() {
       driverLeft = millis();
     }
     else {//redundancy
-      driverLeft = 0;
+      //driverLeft = 0;
+      queueDisarm = true;
     }
   } else { //driverLeft is a timestamp, driver is gone
     if (driverPresent) { //driver is present but the timer is still going
-      driverLeft = 0;
+      //driverLeft = 0;
       queueDisarm = true;
     }
   }
@@ -343,13 +347,21 @@ void setup() {
   // WiFi, not integrated yet
   Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED) {
+  int connectionAttempts = 0;
+  while (WiFi.status() != WL_CONNECTED && connectionAttempts <= maxConnectionAttempts) {
     delay(500);
     Serial.print(".");
+    connectionAttempts++;
   }
-  Serial.println();
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());  // <── copy this into the app Settings
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println();
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());  // <── copy this into the app Settings
+  }
+  else {
+    Serial.println("Wifi not connected, Running in Offline mode");
+  }
 
   server.begin(); 
 }
