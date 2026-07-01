@@ -4,14 +4,11 @@ Child-in-vehicle monitoring dashboard with push notifications for the Arduino Un
 
 ** How to setup virtual environment for Node.js
 1. Install "nodeenv" library using pip (python package manager)
-  -pip install nodeenv
-2. Create a virtual environment 
-  -nodeenv <name_of_environment>
-3. activate the virtual environment
-  -./<name_of_environment>/Scripts/activate (assuming you are in the directory the environment is in)
-4. Enter the directory for the "app" folder
-  -cd app
-5. Run the following commands vvv
+--> ```pip install nodeenv```
+3. Create a virtual environment --> ```nodeenv <name_of_environment>```
+4. activate the virtual environment --> ```./<name_of_environment>/Scripts/activate``` (assuming you are in the directory the environment is in)
+5. Enter the directory for the "app" folder --> ```cd app```
+6. Run the following commands
 ## Quick start
 
 ```bash
