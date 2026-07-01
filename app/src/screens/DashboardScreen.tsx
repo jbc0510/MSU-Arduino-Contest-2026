@@ -124,8 +124,8 @@ export default function DashboardScreen() {
   const [devOpen, setDevOpen] = useState(false);
 
   const tempStatus =
-    sensors.temp >= 38 ? { label: 'Danger', color: COLORS.red } :
-    sensors.temp >= 32 ? { label: 'Warm', color: COLORS.amber } :
+    sensors.temp >= 80 ? { label: 'Danger', color: COLORS.red } :
+    sensors.temp >= 75 ? { label: 'Warm', color: COLORS.amber } :
     { label: 'Comfortable', color: COLORS.teal };
 
   return (
@@ -163,7 +163,7 @@ export default function DashboardScreen() {
           iconBg={COLORS.shieldBlueDim}
           label="Cabin Temperature"
           value={sensors.temp.toFixed(1)}
-          unit="°C"
+          unit="°F"
           sub={tempStatus.label}
           subColor={tempStatus.color}
           accentColor={COLORS.shieldBlue}
@@ -206,7 +206,7 @@ export default function DashboardScreen() {
             icon="🌡"
             iconBg={COLORS.pink}
             label="Temperature Sensor"
-            value={`${sensors.temp.toFixed(1)}°C`}
+            value={`${sensors.temp.toFixed(1)}°F`}
             active={true}
           />
         </View>

@@ -45,7 +45,7 @@ function EventCard({ event }: { event: AlertEvent }) {
       <Text style={styles.eventMsg}>{event.message}</Text>
       <View style={styles.eventMeta}>
         <Text style={styles.eventMetaText}>
-          {event.temp.toFixed(1)}°C cabin · heat index {event.heatIndex}°C
+          {event.temp.toFixed(1)}°F cabin · heat index {event.heatIndex}°F
         </Text>
         {event.acknowledged && (
           <View style={styles.ackBadge}>

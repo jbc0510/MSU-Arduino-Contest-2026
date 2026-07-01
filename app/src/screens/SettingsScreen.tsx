@@ -136,14 +136,14 @@ export default function SettingsScreen() {
       <Text style={styles.sectionLabel}>Stage 4 heat gate</Text>
       <SectionCard>
         <SettingRow
-          label="Heat index threshold (°C)"
+          label="Heat index threshold (°F)"
           sub="Stage 4 SMS only fires above this value AND after 2:30"
           right={
             <TextInput
               style={[styles.input, { width: 70 }]}
               value={heatGate}
               onChangeText={setHeatGate}
-              placeholder="38"
+              placeholder="88"
               placeholderTextColor={COLORS.muted}
               keyboardType="number-pad"
             />
@@ -152,8 +152,8 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <View style={styles.callout}>
           <Text style={styles.calloutText}>
-            Dual-gate: Stage 4 requires BOTH the 2:30 timer AND heat index ≥ {heatGate}°C.
-            A 30°C cabin at 2:31 will not trigger SMS.
+            Dual-gate: Stage 4 requires BOTH the 2:30 timer AND heat index ≥ {heatGate}°F.
+            A 86°F cabin at 2:31 will not trigger SMS.
           </Text>
         </View>
       </SectionCard>

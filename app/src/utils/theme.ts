@@ -63,9 +63,9 @@ export const SPACING = {
 export type AlertStage = 0 | 1 | 2 | 3 | 4;
 
 export interface SensorData {
-  temp: number;       // °C
+  temp: number;       // °F
   humidity: number;   // %
-  heatIndex: number;  // °C feels-like
+  heatIndex: number;  // °F feels-like
   elapsedSecs: number;
   stage: number;
   pressure: boolean;  // seat occupied
