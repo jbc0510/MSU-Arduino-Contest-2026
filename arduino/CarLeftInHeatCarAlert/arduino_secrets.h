@@ -1,7 +1,0 @@
-#ifndef ARDUINO_SECRETS_H
-#define ARDUINO_SECRETS_H
-
-#define SECRET_SSID "CAPC-IoT"
-#define SECRET_PASS "C@PCIoT2024!@"
-
-#endif
