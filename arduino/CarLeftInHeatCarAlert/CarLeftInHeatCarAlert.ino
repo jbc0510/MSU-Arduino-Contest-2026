@@ -157,34 +157,64 @@ void transitionState() {
 
 void determineNextState() {
   //decide the next state based on the current state/time/temperature
+  
+  //skip to stage 4 if its too hot
+  if (currentState != State::IDLE && temperature >= transitionTemperature[4]) {
+      nextState = State::STAGE4;
+      return;
+  }
+
   switch (currentState) {
     case State::IDLE:
-      if (childDetected && elapsed >= transitionTime[1]) {
+      if (!driverPresent && childDetected && elapsed >= transitionTime[1]) {
         nextState = State::STAGE1;
       }
       break;
     case State::STAGE1:
-      if (childDetected && elapsed >= transitionTime[2] && temperature >= transitionTemperature[2]) { //childDetected && 
-        if (temperature >= transitionTemperature[3]) {
-          nextState = State::STAGE3;
-        } else {
-          nextState = State::STAGE2;
-        }
-      } else {
+      if (!childDetected) {
         nextState = State::STAGE1;
+      }
+      else if (childDetected && elapsed >= transitionTime[2]) {
+        if (temperature >= transitionTemperature[3]) {//excessive temperature, skipping a stage
+            nextState = State::STAGE3;
+          }
+          else if (temperature >= transitionTemperature[2]) { //transtiton requirements fulfilled
+            nextState = State::STAGE2;
+          }
+          //explicitly hold state
+          else {
+            nextState = State::STAGE1;
+          }
       }
       break;
     case State::STAGE2:
-      if (childDetected && elapsed >= transitionTime[3] && temperature >= transitionTemperature[3]) { //childDetected && 
+      //de-escalation. bypasses time
+      if (temperature < transitionTemperature[2]) {
+        nextState = State::STAGE1;
+      }
+      //escalation
+      else if (childDetected && elapsed >= transitionTime[3] && temperature >= transitionTemperature[3]) {
         nextState = State::STAGE3;
-      } else {
+      }
+      //explicitly hold state
+      else {
         nextState = State::STAGE2;
       }
       break;
     case State::STAGE3:
-      if (childDetected && elapsed >= transitionTime[4]) { //childDetected && 
+      //de-escalation
+      if (temperature < transitionTemperature[2]) {
+        nextState = State::STAGE1;
+      }
+      else if (temperature < transitionTemperature[3]) {
+        nextState = State::STAGE2;
+      }
+      //escalation
+      else if (childDetected && elapsed >= transitionTime[4] && temperature >= transitionTemperature[4]) {
         nextState = State::STAGE4;
-      } else {
+      }
+      //explicitly hold state
+      else {
         nextState = State::STAGE3;
       }
       break;
