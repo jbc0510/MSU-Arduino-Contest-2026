@@ -18,7 +18,7 @@ Adafruit BusIO 1.17.4
 #include "arduino_secrets.h"
 
 // INTERNAL SETTINGS
-#define DEBUG_MODE 0 //0 --> off, 1 --> on
+#define DEBUG_MODE 1 //0 --> off, 1 --> on
 
 #if DEBUG_MODE
   #define DEBUG_PRINTLN(x) Serial.println(x)
@@ -43,7 +43,7 @@ const int buzzer = 7;
 const int pinLED = 11;
 
 //TRANSITION VALUES
-float transitionTemperature[] = { 0, 0, 82.00, 85.00, 88.00 };
+float transitionTemperature[] = { 0, 0, 78.00, 79.00, 80.00 };
 //in milliseconds
 long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 
@@ -98,6 +98,7 @@ volatile bool onStatus = false;
 volatile bool queueDisarm = false;
 volatile unsigned long lastPress = 0;
 volatile unsigned long lastSwitchTime = 0;
+volatile bool switchChanged = false;
 
 //Initialize Classes for Component Libraries
 DHT dht(temperatureSensor, DHT22);
@@ -266,6 +267,7 @@ void determineOutputs() {
 
 // ── OLED update ───────────────────────────────────────────────────────────────
 void updateOled() {
+  displayOn = true;
   oled.clearDisplay();
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
@@ -319,6 +321,8 @@ String readJsonObject(uint32_t timeout_ms) {
   bool started = false;
   uint32_t start = millis();
   while (millis() - start < timeout_ms) {
+    //IMMEDIATELY BREAK If the system is turned off
+    if (!onStatus) return "";
     while (Serial1.available()) {
       char c = Serial1.read();
       if (c == '{') {
@@ -373,9 +377,10 @@ void handleClient(WiFiClient& client) {
 
 // Interrupts
 void whenTurnedOn() {
-  if (millis() - lastSwitchTime > 200) {
-    onStatus = !onStatus;
+  if (millis() - lastSwitchTime > 150) {
+    onStatus = (digitalRead(powerSwitch) == LOW);
     lastSwitchTime = millis();
+    switchChanged = true;
   }
 }
 
@@ -409,6 +414,15 @@ void startWiFiConnection() {
     DEBUG_PRINTLN("Wifi not connected, Running in Offline mode");
   } 
 }
+
+void onShutDown() { //forcefully turn off all displays etc
+  analogWrite(pinLED, 0);
+  noTone(buzzer);
+  oled.clearDisplay();
+  oled.display();
+  displayOn = false;
+}
+
 //MAIN FUNCTIONS
 void setup() {
   // put your setup code here, to run once:
@@ -437,10 +451,13 @@ void setup() {
   }
   oled.clearDisplay();
   oled.display();
+  oledUpdateFlag = true;
 
   //Interrupts
+  attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, CHANGE);
   attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, FALLING);
-  
+  onStatus = (digitalRead(powerSwitch) == LOW);
+
   //Initial sensor values
   temperature = dht.readTemperature(true);
   onStatus = (digitalRead(powerSwitch) == LOW);
@@ -453,34 +470,34 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
-  onStatus = (digitalRead(powerSwitch) == LOW);
+  if (switchChanged) {
+    switchChanged = false; //Flag for unprocessed
+    if (!onStatus) {//If the system was just switched off
+      onShutDown();
+    }
+  }
 
   if (onStatus == false) {
-    static unsigned long lastPrint = 0;
-    if (millis() - lastPrint > 2000) {//OFF
-      DEBUG_PRINTLN("System Sleep Mode (Switch is OFF)");
-      lastPrint = millis();
-    }
-
-    analogWrite(pinLED, 0);
-    noTone(buzzer);
-    
-    oled.ssd1306_command(SSD1306_DISPLAYOFF);
-    displayOn = false;
-    
     if (WiFi.status() == WL_CONNECTED || wifiInitialized) {
       WiFi.end();
       wifiInitialized = false;
     }
+
+    static unsigned long lastPrint = 0; //static means the variable remembers its value over different function calls (every loop is a function call)
+    if (millis() - lastPrint > 2000) {//Print to indicate that the system is off
+      DEBUG_PRINTLN("System Sleep Mode (Switch is OFF)");
+      lastPrint = millis();
+    }
+
     return; //skip the rest of the loop
   }
 
   //assume power on because loop hasn't ended
-  if (!displayOn) {
+  if (!displayOn) {//If the display is not on turn it on, the system is on now
     oled.ssd1306_command(SSD1306_DISPLAYON);
-    displayOn = true;
+    oledUpdateFlag = true;
   }
-  if (!wifiInitialized) startWiFiConnection();
+  if (!wifiInitialized) startWiFiConnection();//if wifi is not connected, connect it
 
   //manage alert timing 
   if (driverLeft != 0) {
@@ -490,7 +507,7 @@ void loop() {
     elapsed = 0;
   }
 
-  if (millis() - lastCameraCheck >= cameraInterval) {
+  if (millis() - lastCameraCheck >= cameraInterval) {//If the camera has not been checked in awhile check it
     lastCameraCheck = millis();
     bool previousChildState = childDetected;
 
@@ -523,6 +540,11 @@ void loop() {
           }
         #endif
       }
+      //Check for shutdown again cause this for loop takes a whole second (900ms)
+    if (!onStatus) {
+      onShutDown();
+      return;
+    }
     }
     if (!sawResults) {
       childDetected = false;
@@ -531,7 +553,7 @@ void loop() {
     if (childDetected != previousChildState) oledUpdateFlag = true;
   }
 
-  if (millis() - lastPressureCheck >= pressInterval) {
+  if (millis() - lastPressureCheck >= pressInterval) {//If the pressure sensor has not been checked in awhile check it
     //Detect Driver
     lastPressureCheck = millis();
     bool previousDriverState = driverPresent;
@@ -541,7 +563,7 @@ void loop() {
     if (driverPresent != previousDriverState) oledUpdateFlag = true;
   }
 
-  if (millis() - lastTempCheck >= tempInterval) {
+  if (millis() - lastTempCheck >= tempInterval) {//If the temperature has not been checked in awhile check it
     lastTempCheck = millis();
     float newTemp = dht.readTemperature(true); //In fahrenheit
 
@@ -557,7 +579,7 @@ void loop() {
   determineOutputs();
 
   
-  // ── HTTP server ─────────────────────────────────────────────────────────────
+  //Send data across the HTTP server
   if (wifiInitialized && WiFi.status() == WL_CONNECTED) {
     WiFiClient client = server.available();
     if (client) {
@@ -567,4 +589,5 @@ void loop() {
   } 
   //DEBUG_PRINTLN(temperature);
   //DEBUG_PRINTLN(elapsed);
+  delay(500);
 }
