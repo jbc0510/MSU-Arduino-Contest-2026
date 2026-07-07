@@ -24,9 +24,9 @@ const char* WIFI_SSID = SECRET_SSID;
 const char* WIFI_PASS = SECRET_PASS;
 
 //PINS
-const int powerSwitch = 4;
+const int powerSwitch = 2;
 const int pressureDivider = A0;
-const int temperatureSensor = 2;
+const int temperatureSensor = 4;
 const int disarmButton = 3;
 const int buzzer = 7;
 const int pinLED = 11;
@@ -39,7 +39,6 @@ long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 
 float temperature;
 const int pressureThreshold = 900;
-
 unsigned long elapsed = 73;
 unsigned long driverLeft = 0;
 
@@ -67,7 +66,8 @@ const int maxConnectionAttempts = 20;
 //VARIABLES USED IN INTERRUPTS
 volatile bool onStatus = false;
 volatile bool queueDisarm = false;
-volatile long lastPress = 0;
+volatile unsigned long lastPress = 0;
+volatile unsigned long lastSwitchTime = 0;
 
 //Initialize Classes for Component Libraries
 DHT dht(temperatureSensor, DHT22);
@@ -125,7 +125,7 @@ void determineNextState() {
       }
       break;
     case State::STAGE1:
-      if (childDetected && elapsed >= transitionTime[2] && temperature >= transitionTemperature[2]) {
+      if (childDetected && elapsed >= transitionTime[2] && temperature >= transitionTemperature[2]) { //childDetected && 
         if (temperature >= transitionTemperature[3]) {
           nextState = State::STAGE3;
         } else {
@@ -136,14 +136,14 @@ void determineNextState() {
       }
       break;
     case State::STAGE2:
-      if (childDetected && elapsed >= transitionTime[3] && temperature >= transitionTemperature[3]) {
+      if (childDetected && elapsed >= transitionTime[3] && temperature >= transitionTemperature[3]) { //childDetected && 
         nextState = State::STAGE3;
       } else {
         nextState = State::STAGE2;
       }
       break;
     case State::STAGE3:
-      if (childDetected && elapsed >= transitionTime[4]) {
+      if (childDetected && elapsed >= transitionTime[4]) { //childDetected && 
         nextState = State::STAGE4;
       } else {
         nextState = State::STAGE3;
@@ -305,7 +305,10 @@ void handleClient(WiFiClient& client) {
 
 // Interrupts
 void whenTurnedOn() {
-  onStatus = true;
+  if (millis() - lastSwitchTime > 200) {
+    onStatus = !onStatus;
+    lastSwitchTime = millis();
+  }
 }
 
 void onButtonPress() {
@@ -327,6 +330,7 @@ void setup() {
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
   pinMode(disarmButton, INPUT_PULLUP);
+  pinMode(powerSwitch, INPUT_PULLUP);
   Wire.begin();  //Setup for I2C
 
 
@@ -341,8 +345,8 @@ void setup() {
   oled.display();
 
   //Interrupts
-  attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, RISING);
   attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, FALLING);
+  onStatus = (digitalRead(powerSwitch) == LOW);
 
   // WiFi, not integrated yet
   Serial.print("Connecting to WiFi");
@@ -368,6 +372,27 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+
+  onStatus = (digitalRead(powerSwitch) == LOW);
+
+  if (onStatus == false) {
+    static unsigned long lastPrint = 0;
+    if (millis() - lastPrint > 2000) {//OFF
+      Serial.println("System Sleep Mode (Switch is OFF)");
+      lastPrint = millis();
+
+      analogWrite(pinLED, 0);
+      noTone(buzzer);
+      oled.clearDisplay();
+      if (WiFi.status() == WL_CONNECTED) {
+        WiFi.end();
+      }
+      return;
+    }
+    else { //ON
+      Serial.println("Sys on");
+    }
+  }
 
   if (driverLeft != 0) {
     elapsed = millis() - driverLeft;
