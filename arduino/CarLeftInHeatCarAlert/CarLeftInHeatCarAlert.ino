@@ -51,13 +51,13 @@ long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 float temperature;
 const int pressureThreshold = 900;
 
-unsigned long elapsed = 73;
-unsigned long driverLeft = 0;
+unsigned long elapsed = 0; //Time since driver has left
+unsigned long driverLeft = 0; //TimeSTAMP of when the driver left
 
 //polling intervals for sensors
-unsigned long cameraInterval = 5000L;
-unsigned long pressInterval = 10000L;
-unsigned long tempInterval = 15000L;
+unsigned long cameraInterval = 1000L;//5000L;
+unsigned long pressInterval = 1000L;//10000L;
+unsigned long tempInterval = 1000L;//15000L;
 
 //BOOLEANS
 bool inAlert = false;
@@ -525,6 +525,7 @@ void loop() {
         sawResults = true;
         JsonArray boxes = doc["data"]["boxes"];
         if (boxes.size() == 0) {
+          DEBUG_PRINTLN(millis()/1000.0);
           DEBUG_PRINTLN("(no person in frame)");
           childDetected = false;
         } else {
@@ -550,15 +551,18 @@ void loop() {
       childDetected = false;
       DEBUG_PRINTLN("no response");
     }
+    #if DEBUG_MODE 
+      childDetected = true;
+    #endif
     if (childDetected != previousChildState) oledUpdateFlag = true;
   }
-
+  static int pressureSensorValue = 900;
   if (millis() - lastPressureCheck >= pressInterval) {//If the pressure sensor has not been checked in awhile check it
     //Detect Driver
     lastPressureCheck = millis();
     bool previousDriverState = driverPresent;
 
-    int pressureSensorValue = analogRead(pressureDivider);
+    pressureSensorValue = analogRead(pressureDivider);
     driverPresent = (pressureSensorValue < pressureThreshold);
     if (driverPresent != previousDriverState) oledUpdateFlag = true;
   }
@@ -587,7 +591,11 @@ void loop() {
       client.stop();
     }
   } 
-  //DEBUG_PRINTLN(temperature);
-  //DEBUG_PRINTLN(elapsed);
+  DEBUG_PRINT("pressureSensor Analog Value: ");
+  DEBUG_PRINTLN(pressureSensorValue);
+  DEBUG_PRINT("Temp: ");
+  DEBUG_PRINTLN(temperature);
+  DEBUG_PRINTLN("Time elapsed in since driver left: ");
+  DEBUG_PRINTLN(elapsed);
   delay(500);
 }
