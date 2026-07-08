@@ -35,7 +35,7 @@ const char* WIFI_SSID = SECRET_SSID;
 const char* WIFI_PASS = SECRET_PASS;
 
 //PINS
-const int powerSwitch = 2;
+//const int powerSwitch = 2;
 const int pressureDivider = A0;
 const int temperatureSensor = 4;
 const int disarmButton = 3;
@@ -43,7 +43,7 @@ const int buzzer = 7;
 const int pinLED = 11;
 
 //TRANSITION VALUES
-float transitionTemperature[] = { 0, 0, 78.00, 79.00, 80.00 };
+float transitionTemperature[] = { 0, 0, 77.00, 78.00, 79.00 };
 //in milliseconds
 long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 
@@ -378,7 +378,7 @@ void handleClient(WiFiClient& client) {
 // Interrupts
 void whenTurnedOn() {
   if (millis() - lastSwitchTime > 150) {
-    onStatus = (digitalRead(powerSwitch) == LOW);
+    //onStatus = (digitalRead(powerSwitch) == LOW);
     lastSwitchTime = millis();
     switchChanged = true;
   }
@@ -437,7 +437,7 @@ void setup() {
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
   pinMode(disarmButton, INPUT_PULLUP);
-  pinMode(powerSwitch, INPUT_PULLUP);
+  //pinMode(powerSwitch, INPUT_PULLUP);
   Wire.begin();  //Setup for I2C
 
 
@@ -454,13 +454,13 @@ void setup() {
   oledUpdateFlag = true;
 
   //Interrupts
-  attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, CHANGE);
+  //attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, CHANGE);
   attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, FALLING);
-  onStatus = (digitalRead(powerSwitch) == LOW);
+  //onStatus = (digitalRead(powerSwitch) == LOW);
 
   //Initial sensor values
   temperature = dht.readTemperature(true);
-  onStatus = (digitalRead(powerSwitch) == LOW);
+  onStatus = true;//(digitalRead(powerSwitch) == LOW);
   if (onStatus) {
     startWiFiConnection();
   }
