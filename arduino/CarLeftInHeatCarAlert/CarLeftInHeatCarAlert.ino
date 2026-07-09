@@ -35,7 +35,7 @@ const char* WIFI_SSID = SECRET_SSID;
 const char* WIFI_PASS = SECRET_PASS;
 
 //PINS
-const int powerSwitch = 2;
+//const int powerSwitch = 2;
 const int pressureDivider = A0;
 const int temperatureSensor = 4;
 const int disarmButton = 3;
@@ -43,12 +43,14 @@ const int buzzer = 7;
 const int pinLED = 11;
 
 //TRANSITION VALUES
-float transitionTemperature[] = { 0, 0, 78.00, 79.00, 80.00 };
+float transitionHeatIndex[] = { 0, 0, 77.00, 78.00, 79.00 };
 //in milliseconds
 long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 
 
 float temperature;
+float humidity;
+float heatIndex;
 const int pressureThreshold = 900;
 
 unsigned long elapsed = 0; //Time since driver has left
@@ -160,7 +162,7 @@ void determineNextState() {
   //decide the next state based on the current state/time/temperature
   
   //skip to stage 4 if its too hot
-  if (currentState != State::IDLE && temperature >= transitionTemperature[4]) {
+  if (currentState != State::IDLE && heatIndex >= transitionHeatIndex[4]) {
       nextState = State::STAGE4;
       return;
   }
@@ -176,10 +178,10 @@ void determineNextState() {
         nextState = State::STAGE1;
       }
       else if (childDetected && elapsed >= transitionTime[2]) {
-        if (temperature >= transitionTemperature[3]) {//excessive temperature, skipping a stage
+        if (heatIndex >= transitionHeatIndex[3]) {//excessive temperature, skipping a stage
             nextState = State::STAGE3;
           }
-          else if (temperature >= transitionTemperature[2]) { //transtiton requirements fulfilled
+          else if (heatIndex >= transitionHeatIndex[2]) { //transtiton requirements fulfilled
             nextState = State::STAGE2;
           }
           //explicitly hold state
@@ -190,11 +192,11 @@ void determineNextState() {
       break;
     case State::STAGE2:
       //de-escalation. bypasses time
-      if (temperature < transitionTemperature[2]) {
+      if (heatIndex < transitionHeatIndex[2]) {
         nextState = State::STAGE1;
       }
       //escalation
-      else if (childDetected && elapsed >= transitionTime[3] && temperature >= transitionTemperature[3]) {
+      else if (childDetected && elapsed >= transitionTime[3] && heatIndex >= transitionHeatIndex[3]) {
         nextState = State::STAGE3;
       }
       //explicitly hold state
@@ -204,14 +206,14 @@ void determineNextState() {
       break;
     case State::STAGE3:
       //de-escalation
-      if (temperature < transitionTemperature[2]) {
+      if (heatIndex < transitionHeatIndex[2]) {
         nextState = State::STAGE1;
       }
-      else if (temperature < transitionTemperature[3]) {
+      else if (heatIndex < transitionHeatIndex[3]) {
         nextState = State::STAGE2;
       }
       //escalation
-      else if (childDetected && elapsed >= transitionTime[4] && temperature >= transitionTemperature[4]) {
+      else if (childDetected && elapsed >= transitionTime[4] && heatIndex >= transitionHeatIndex[4]) {
         nextState = State::STAGE4;
       }
       //explicitly hold state
@@ -375,10 +377,32 @@ void handleClient(WiFiClient& client) {
   client.println("HTTP/1.1 404 Not Found\r\n\r\n");
 }
 
+void updateHeatIndex() {
+  lastTempCheck = millis();
+  bool flagHeatIndex = false;
+  float newTemp = dht.readTemperature(true); //In fahrenheit
+  float newHumidity = dht.readHumidity();
+
+  if (abs(temperature-newTemp) >= 0.2) {
+    oledUpdateFlag = true;
+    temperature = newTemp;
+    flagHeatIndex = true;
+  }
+
+  if (abs(humidity-newHumidity) >= 0.2) {
+    oledUpdateFlag = true;
+    humidity = newHumidity;
+    flagHeatIndex = true;
+  }
+
+  if (flagHeatIndex) {
+    heatIndex = dht.computeHeatIndex(temperature, humidity);
+  }
+}
 // Interrupts
 void whenTurnedOn() {
   if (millis() - lastSwitchTime > 150) {
-    onStatus = (digitalRead(powerSwitch) == LOW);
+    //onStatus = (digitalRead(powerSwitch) == LOW);
     lastSwitchTime = millis();
     switchChanged = true;
   }
@@ -437,7 +461,7 @@ void setup() {
   // Pin Setup
   pinMode(temperatureSensor, INPUT);
   pinMode(disarmButton, INPUT_PULLUP);
-  pinMode(powerSwitch, INPUT_PULLUP);
+  //pinMode(powerSwitch, INPUT_PULLUP);
   Wire.begin();  //Setup for I2C
 
 
@@ -454,13 +478,15 @@ void setup() {
   oledUpdateFlag = true;
 
   //Interrupts
-  attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, CHANGE);
+  //attachInterrupt(digitalPinToInterrupt(powerSwitch), whenTurnedOn, CHANGE);
   attachInterrupt(digitalPinToInterrupt(disarmButton), onButtonPress, FALLING);
-  onStatus = (digitalRead(powerSwitch) == LOW);
+  //onStatus = (digitalRead(powerSwitch) == LOW);
 
   //Initial sensor values
   temperature = dht.readTemperature(true);
-  onStatus = (digitalRead(powerSwitch) == LOW);
+  humidity = dht.readHumidity();
+  heatIndex = dht.computeHeatIndex(temperature,humidity);
+  onStatus = true;//(digitalRead(powerSwitch) == LOW);
   if (onStatus) {
     startWiFiConnection();
   }
@@ -568,13 +594,7 @@ void loop() {
   }
 
   if (millis() - lastTempCheck >= tempInterval) {//If the temperature has not been checked in awhile check it
-    lastTempCheck = millis();
-    float newTemp = dht.readTemperature(true); //In fahrenheit
-
-    if (abs(temperature-newTemp) >= 0.2) {
-      oledUpdateFlag = true;
-      temperature = newTemp;
-    }
+    updateHeatIndex();
   }
 
   //State Machine
@@ -593,8 +613,8 @@ void loop() {
   } 
   DEBUG_PRINT("pressureSensor Analog Value: ");
   DEBUG_PRINTLN(pressureSensorValue);
-  DEBUG_PRINT("Temp: ");
-  DEBUG_PRINTLN(temperature);
+  DEBUG_PRINT("Heat Index: ");
+  DEBUG_PRINTLN(heatIndex);
   DEBUG_PRINTLN("Time elapsed in since driver left: ");
   DEBUG_PRINTLN(elapsed);
   delay(500);
