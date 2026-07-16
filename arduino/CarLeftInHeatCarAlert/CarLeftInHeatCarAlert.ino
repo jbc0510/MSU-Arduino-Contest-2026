@@ -82,6 +82,7 @@ State nextState;
 // WiFi Connection
 const int maxConnectionAttempts = 20;
 bool wifiInitialized = false;
+bool offlineMode = false;
 bool displayOn = false;
 
 // tracking last sensor polling
@@ -436,6 +437,7 @@ void startWiFiConnection() {
   }
   else {
     DEBUG_PRINTLN("Wifi not connected, Running in Offline mode");
+    offlineMode = true;
   } 
 }
 
@@ -523,7 +525,7 @@ void loop() {
     oled.ssd1306_command(SSD1306_DISPLAYON);
     oledUpdateFlag = true;
   }
-  if (!wifiInitialized) startWiFiConnection();//if wifi is not connected, connect it
+  if (!wifiInitialized && !offlineMode) startWiFiConnection();//if wifi is not connected, connect it
 
   //manage alert timing 
   if (driverLeft != 0) {
@@ -611,11 +613,11 @@ void loop() {
       client.stop();
     }
   } 
-  DEBUG_PRINT("pressureSensor Analog Value: ");
-  DEBUG_PRINTLN(pressureSensorValue);
-  DEBUG_PRINT("Heat Index: ");
-  DEBUG_PRINTLN(heatIndex);
-  DEBUG_PRINTLN("Time elapsed in since driver left: ");
-  DEBUG_PRINTLN(elapsed);
+  //DEBUG_PRINT("pressureSensor Analog Value: ");
+  //DEBUG_PRINTLN(pressureSensorValue);
+  //DEBUG_PRINT("Heat Index: ");
+  //DEBUG_PRINTLN(heatIndex);
+  //DEBUG_PRINTLN("Time elapsed in since driver left: ");
+  //DEBUG_PRINTLN(elapsed);
   delay(500);
 }
