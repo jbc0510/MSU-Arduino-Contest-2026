@@ -82,6 +82,7 @@ State nextState;
 // WiFi Connection
 const int maxConnectionAttempts = 20;
 bool wifiInitialized = false;
+bool offlineMode = false;
 bool displayOn = false;
 
 // tracking last sensor polling
@@ -439,6 +440,7 @@ void startWiFiConnection() {
   }
   else {
     DEBUG_PRINTLN("Wifi not connected, Running in Offline mode");
+    offlineMode = true;
   } 
 }
 
@@ -526,7 +528,7 @@ void loop() {
     oled.ssd1306_command(SSD1306_DISPLAYON);
     oledUpdateFlag = true;
   }
-  if (!wifiInitialized) startWiFiConnection();//if wifi is not connected, connect it
+  if (!wifiInitialized && !offlineMode) startWiFiConnection();//if wifi is not connected, connect it
 
   //manage alert timing 
   if (driverLeft != 0) {

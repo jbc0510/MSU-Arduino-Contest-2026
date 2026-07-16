@@ -128,6 +128,11 @@ export default function DashboardScreen() {
     sensors.temp >= 75 ? { label: 'Warm', color: COLORS.amber } :
     { label: 'Comfortable', color: COLORS.teal };
 
+  const heatIndexStatus =
+    sensors.heatIndex >= 103 ? { label: 'Danger', color: COLORS.red } :
+    sensors.heatIndex >= 90  ? { label: 'Caution', color: COLORS.amber } :
+    { label: 'Normal', color: COLORS.teal };
+
   return (
     <ScrollView
       style={[styles.screen, { paddingTop: insets.top }]}
@@ -156,18 +161,30 @@ export default function DashboardScreen() {
       {/* Status hero */}
       <StatusHero stage={stage} />
 
-      {/* Metrics */}
+      {/* Metrics — temp + heat index next to each other*/}
       <View style={styles.metricsRow}>
         <MetricCard
           icon="🌡"
           iconBg={COLORS.shieldBlueDim}
-          label="Cabin Temperature"
+          label="Cabin Temp"
           value={sensors.temp.toFixed(1)}
           unit="°F"
           sub={tempStatus.label}
           subColor={tempStatus.color}
           accentColor={COLORS.shieldBlue}
         />
+        <MetricCard
+          icon="🔥"
+          iconBg={COLORS.peach}
+          label="Heat Index"
+          value={sensors.heatIndex.toFixed(1)}
+          unit="°F"
+          sub={heatIndexStatus.label}
+          subColor={heatIndexStatus.color}
+          accentColor={heatIndexStatus.color}
+        />
+      </View>
+      <View style={styles.metricsRowSingle}>
         <MetricCard
           icon="⏱"
           iconBg={COLORS.purpleDim}
@@ -325,6 +342,10 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     gap: 10,
+    marginBottom: 10,
+  },
+  metricsRowSingle: {
+    flexDirection: 'row',
     marginBottom: SPACING.lg,
   },
   metricCard: {
@@ -343,9 +364,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   metricIconGlyph: { fontSize: 17 },
-  metricLabel: { fontSize: 12, color: COLORS.textSec, fontWeight: '500', marginBottom: 4 },
+  metricLabel: { fontSize: 11, color: COLORS.textSec, fontWeight: '500', marginBottom: 4 },
   metricValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3, marginBottom: 6 },
-  metricValue: { fontSize: 24, fontWeight: '700', color: COLORS.text },
+  metricValue: { fontSize: 20, fontWeight: '700', color: COLORS.text },
   metricUnit: { fontSize: 13, color: COLORS.textSec },
   metricSub: { fontSize: 12, fontWeight: '600' },
 
