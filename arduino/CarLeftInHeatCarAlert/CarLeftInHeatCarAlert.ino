@@ -51,7 +51,7 @@ long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 float temperature;
 float humidity;
 float heatIndex;
-const int pressureThreshold = 900;
+const int pressureThreshold = 700;
 
 unsigned long elapsed = 0; //Time since driver has left
 unsigned long driverLeft = 0; //TimeSTAMP of when the driver left
@@ -291,6 +291,9 @@ void updateOled() {
 
   oled.print("Temp: ");
   oled.print(temperature, 1);
+  oled.println(" F");
+  oled.print("Heat Index: ");
+  oled.print(heatIndex, 1);
   oled.println(" F");
 
 
@@ -591,7 +594,7 @@ void loop() {
     bool previousDriverState = driverPresent;
 
     pressureSensorValue = analogRead(pressureDivider);
-    driverPresent = (pressureSensorValue < pressureThreshold);
+    driverPresent = (pressureSensorValue > pressureThreshold);
     if (driverPresent != previousDriverState) oledUpdateFlag = true;
   }
 
@@ -613,11 +616,13 @@ void loop() {
       client.stop();
     }
   } 
-  //DEBUG_PRINT("pressureSensor Analog Value: ");
-  //DEBUG_PRINTLN(pressureSensorValue);
-  //DEBUG_PRINT("Heat Index: ");
-  //DEBUG_PRINTLN(heatIndex);
-  //DEBUG_PRINTLN("Time elapsed in since driver left: ");
-  //DEBUG_PRINTLN(elapsed);
+  DEBUG_PRINT("pressureSensor Analog Value: ");
+  DEBUG_PRINTLN(pressureSensorValue);
+  DEBUG_PRINT("Heat Index: ");
+  DEBUG_PRINTLN(heatIndex);
+  DEBUG_PRINTLN("Time elapsed in since driver left: ");
+  DEBUG_PRINTLN(elapsed);
+  DEBUG_PRINT("queueDisarm: ");
+  DEBUG_PRINTLN(queueDisarm);
   delay(500);
 }
