@@ -620,5 +620,7 @@ void loop() {
   DEBUG_PRINTLN(heatIndex);
   DEBUG_PRINTLN("Time elapsed in since driver left: ");
   DEBUG_PRINTLN(elapsed);
+  DEBUG_PRINT("queueDisarm: ");
+  DEBUG_PRINTLN(queueDisarm);
   delay(500);
 }
