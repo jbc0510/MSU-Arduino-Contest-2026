@@ -61,9 +61,9 @@ const int buzzer = 7;
 const int pinLED = 11;
 
 //TRANSITION VALUES
-float transitionHeatIndex[] = { 0, 0, 80.00, 81.00, 83.00 };
+float transitionHeatIndex[] = { 0, 0, 82.00, 90.00, 97.00 };
 //in milliseconds
-long transitionTime[] = { 0, 5000L, 10000L, 15000L, 20000L };
+long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 
 
 float temperature;
@@ -75,9 +75,9 @@ unsigned long elapsed = 0; //Time since driver has left
 unsigned long driverLeft = 0; //TimeSTAMP of when the driver left
 
 //polling intervals for sensors
-unsigned long cameraInterval = 1000L;//5000L;
-unsigned long pressInterval = 1000L;//10000L;
-unsigned long tempInterval = 1000L;//15000L;
+unsigned long cameraInterval = 5000L;
+unsigned long pressInterval = 10000L;
+unsigned long tempInterval = 15000L;
 
 //BOOLEANS
 bool inAlert = false;
@@ -367,6 +367,7 @@ void updateOled() {
 String buildJson() {
   String j = "{";
   j += String("\"temp\":") + String(temperature, 2) + ",";
+  j += String("\"heatIndex\":") + String(heatIndex, 2) + ",";
   j += String("\"driverPresent\":") + (driverPresent ? "true" : "false") + ",";
   j += String("\"childDetected\":") + (childDetected ? "true" : "false") + ",";
   j += String("\"stage\":") + String(currentState) + ",";
