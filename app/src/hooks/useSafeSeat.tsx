@@ -21,16 +21,33 @@ const SMS_SERVER_URL = process.env.EXPO_PUBLIC_SMS_SERVER_URL;
 const EMERGENCY_PHONE = process.env.EXPO_PUBLIC_EMERGENCY_PHONE;
 
 async function sendEmergencySms(message: string): Promise<void> {
+  const baseUrl = process.env.EXPO_PUBLIC_SMS_SERVER_URL || 'http://172.20.95.106:5000';
+  const targetUrl = `${baseUrl}/send-alert`; // Generates: http://192.168.x.x:5000/send-alert
+
+  console.log('[SMS Debug] Attempting POST to:', targetUrl);
+
   try {
-    const res = await fetch(`${SMS_SERVER_URL}/send-alert`, {
+    const res = await fetch(targetUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json' 
+      },
       body: JSON.stringify({
         phoneNumber: EMERGENCY_PHONE,
         message,
       }),
     });
-    const data = await res.json();
+
+    const responseText = await res.text();
+
+    if (responseText.trim().startsWith('<')) {
+      console.error(`[SMS Error] Server returned HTML instead of JSON (Status ${res.status}):`);
+      console.error(responseText.slice(0, 300));
+      return;
+    }
+
+    const data = JSON.parse(responseText);
     if (data.success) {
       console.log('[SMS] Emergency SMS sent successfully. ID:', data.messageId);
     } else {

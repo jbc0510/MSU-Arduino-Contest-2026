@@ -8,6 +8,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Optional debug print to verify keys load on startup:
+console.log("Loaded Vonage Key:", process.env.VONAGE_API_KEY ? "Yes" : "No");
+
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
   apiSecret: process.env.VONAGE_API_SECRET,
@@ -51,7 +54,7 @@ app.post("/send-alert", async (req, res) => {
     const result = await Promise.race([
       vonage.sms.send({
         to,
-        from: "SafeSeat",
+        from: process.env.VONAGE_PHONE_NUMBER,//"SafeSeat", 
         text: message,
       }),
       new Promise((_, reject) =>
@@ -72,5 +75,16 @@ app.post("/send-alert", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
+
+// Add this at the VERY BOTTOM of your server file (before app.listen)
+app.use((err, req, res, next) => {
+  console.error("Express Error:", err);
+  res.status(500).json({ success: false, error: err.message || "Internal Server Error" });
+});
+
+app.use((req, res) => {
+  res.status(404).json({ success: false, error: `Route ${req.method} ${req.url} Not Found` });
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
