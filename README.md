@@ -11,6 +11,12 @@ Child-in-vehicle monitoring dashboard with push notifications for the Arduino Un
 6. Run the following commands
 ## Quick start
 
+** How to start the SMS server
+1. open a new terminal
+2. cd into the server file
+3. run node server.js
+
+
 ```bash
 npm install
 npx expo start

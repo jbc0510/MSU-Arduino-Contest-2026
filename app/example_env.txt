@@ -1,0 +1,3 @@
+EXPO_PUBLIC_ARDUINO_IP={the IP expected from the Arduino}
+EXPO_PUBLIC_SMS_SERVER_URL={Your devices IPV4 address}:3000
+EXPO_PUBLIC_EMERGENCY_PHONE={The phone number to text}
