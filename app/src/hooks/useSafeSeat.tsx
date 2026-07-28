@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 import { AlertStage, AlertEvent, SensorData } from '../utils/theme';
 
-// ─── Push notification helpers ───────────────────────────────────────────────
 async function requestPushPermission(): Promise<boolean> {
   console.log('[push] permission requested (stub)');
   return true;
@@ -18,7 +17,30 @@ async function sendLocalPush(title: string, body: string): Promise<void> {
   console.log(`[push] ${title} — ${body}`);
 }
 
-// ─── Arduino polling ──────────────────────────────────────────────────────────
+const SMS_SERVER_URL = process.env.EXPO_PUBLIC_SMS_SERVER_URL;
+const EMERGENCY_PHONE = process.env.EXPO_PUBLIC_EMERGENCY_PHONE;
+
+async function sendEmergencySms(message: string): Promise<void> {
+  try {
+    const res = await fetch(`${SMS_SERVER_URL}/send-alert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phoneNumber: EMERGENCY_PHONE,
+        message,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      console.log('[SMS] Emergency SMS sent successfully. ID:', data.messageId);
+    } else {
+      console.error('[SMS] Server returned failure:', data.error ?? data.message);
+    }
+  } catch (err) {
+    console.error('[SMS] Failed to reach SMS server:', err);
+  }
+}
+
 async function fetchArduinoData(ip: string): Promise<SensorData | null> {
   try {
     const url = `http://${ip}/status`;
@@ -30,7 +52,6 @@ async function fetchArduinoData(ip: string): Promise<SensorData | null> {
   }
 }
 
-// ─── Context ──────────────────────────────────────────────────────────────────
 
 interface SafeSeatState {
   sensors: SensorData;
@@ -45,7 +66,7 @@ interface SafeSeatState {
 }
 
 const MOCK_SENSORS: SensorData = {
-  temp: 72, // Default to matching room-temp Fahrenheit 
+  temp: 72,
   humidity: 0,
   heatIndex: 0,
   elapsedSecs: 0,
@@ -64,16 +85,15 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = useState<AlertEvent[]>([]);
   const [arduinoOnline, setArduinoOnline] = useState(false);
 
-  // Hidden repository backup variable setup
   const defaultIp = process.env.EXPO_PUBLIC_ARDUINO_IP || '127.0.0.1';
   const [arduinoIp, setArduinoIp] = useState(defaultIp);
 
   const stageRef = useRef<AlertStage>(0);
+  const smsSentRef = useRef(false); // prevent duplicate SMS if polling fires twice at Stage 4
   const alertStartRef = useRef<number | null>(null);
 
   useEffect(() => { requestPushPermission(); }, []);
 
-  // Poll Arduino
   useEffect(() => {
     const poll = async () => {
       const data = await fetchArduinoData(arduinoIp);
@@ -81,7 +101,6 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
         setSensors(data);
         setArduinoOnline(true);
 
-        // Read alert stage directly from the incoming Arduino property
         if (data.stage !== undefined && data.stage !== stageRef.current) {
           const hardwareStage = data.stage as AlertStage;
           setStage(hardwareStage);
@@ -89,7 +108,6 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
           fireEvent(hardwareStage, data);
         }
 
-        // Read elapsed counter right from the hardware data output clock
         if (data.elapsedSecs !== undefined) {
           setElapsedSecs(data.elapsedSecs);
         }
@@ -103,13 +121,12 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   }, [arduinoIp]);
 
   const fireEvent = useCallback(async (s: AlertStage, data: SensorData) => {
-    // Corrected labels to °F to properly align with dht.readTemperature(true)
     const messages: Record<AlertStage, string> = {
       0: 'System reset to idle.',
       1: `Child detected in vehicle — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
       2: `Push sent to driver — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
       3: `Full alarm active — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
-      4: `Emergency SMS dispatched — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
+      4: `🆘 SafeSeat EMERGENCY: Child left alone in vehicle. Cabin temp ${data.temp?.toFixed(1) ?? 0}°F. Immediate action required.`,
     };
 
     const pushTitles: Partial<Record<AlertStage, string>> = {
@@ -120,6 +137,18 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
 
     if (pushTitles[s]) {
       await sendLocalPush(pushTitles[s]!, messages[s]);
+    }
+
+    // Stage 4: send emergency SMS 
+    if (s === 4 && !smsSentRef.current) {
+      smsSentRef.current = true; // lock so polling loop can't fire it twice
+      console.log('[SMS] Stage 4 reached — dispatching emergency SMS...');
+      await sendEmergencySms(messages[4]);
+    }
+
+  
+    if (s === 0) {
+      smsSentRef.current = false;
     }
 
     const event: AlertEvent = {
@@ -136,19 +165,18 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const acknowledge = useCallback(async () => {
-    // 1. Send the network command directly to your physical hardware via WiFi
     try {
       const url = `http://${arduinoIp}/ack`;
       await fetch(url, {
         method: 'POST',
-        signal: AbortSignal.timeout(2000) // Don't block the UI if request lags
+        signal: AbortSignal.timeout(2000),
       });
       console.log('[hardware] Reset command dispatched safely.');
     } catch (error) {
       console.log('[hardware] Failed to dispatch remote reset command:', error);
     }
 
-    // 2. Clear out local state properties immediately so the UI responds without lag
+    smsSentRef.current = false; // allow SMS to fire again on next alert
     setSensors(prev => ({ ...prev, driverPresent: true }));
     stageRef.current = 0;
     setStage(0);
@@ -161,7 +189,7 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     if (s === 0) { acknowledge(); return; }
 
     const mockAlert: SensorData = {
-      temp: s >= 3 ? 98.2 : 93.5, // Mocked values adjusted to Fahrenheit standards
+      temp: s >= 3 ? 98.2 : 93.5,
       humidity: 0,
       heatIndex: 0,
       elapsedSecs: 0,
