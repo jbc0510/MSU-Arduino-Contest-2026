@@ -7,6 +7,7 @@ WiFiS3 ...
 Adafruit_SSD1306 2.5.17
 Adafruit GFX Library 1.12.6
 Adafruit BusIO 1.17.4
+Adafruit NeoPixel 1.15.5
 */
 
 // HEADER FILES
@@ -15,6 +16,7 @@ Adafruit BusIO 1.17.4
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFiS3.h>
+#include <Adafruit_NeoPixel.h>
 #include "arduino_secrets.h"
 
 // INTERNAL SETTINGS
@@ -30,6 +32,22 @@ Adafruit BusIO 1.17.4
 
 // GLOBAL VARIABLES
 
+//LED STRIP
+// Which pin on the Arduino is connected to the NeoPixels?
+#define PIN        6 // On Trinket or Gemma, suggest changing this to 1
+
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS 8 // Popular NeoPixel ring size
+
+// When setting up the NeoPixel library, we tell it how many pixels,
+// and which pin to use to send signals. Note that for older NeoPixel
+// strips you might need to change the third parameter -- see the
+// strandtest example for more information on possible values.
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+#define DELAYVAL 250 // Time (in milliseconds) to pause between pixels
+
+
 //WIFI CREDENTIALS
 const char* WIFI_SSID = SECRET_SSID;
 const char* WIFI_PASS = SECRET_PASS;
@@ -43,7 +61,7 @@ const int buzzer = 7;
 const int pinLED = 11;
 
 //TRANSITION VALUES
-float transitionHeatIndex[] = { 0, 0, 77.00, 78.00, 79.00 };
+float transitionHeatIndex[] = { 0, 0, 82.00, 90.00, 97.00 };
 //in milliseconds
 long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 
@@ -51,15 +69,15 @@ long transitionTime[] = { 0, 30000L, 60000L, 90000L, 120000L };
 float temperature;
 float humidity;
 float heatIndex;
-const int pressureThreshold = 900;
+const int pressureThreshold = 700;
 
 unsigned long elapsed = 0; //Time since driver has left
 unsigned long driverLeft = 0; //TimeSTAMP of when the driver left
 
 //polling intervals for sensors
-unsigned long cameraInterval = 1000L;//5000L;
-unsigned long pressInterval = 1000L;//10000L;
-unsigned long tempInterval = 1000L;//15000L;
+unsigned long cameraInterval = 5000L;
+unsigned long pressInterval = 10000L;
+unsigned long tempInterval = 15000L;
 
 //BOOLEANS
 bool inAlert = false;
@@ -82,6 +100,7 @@ State nextState;
 // WiFi Connection
 const int maxConnectionAttempts = 20;
 bool wifiInitialized = false;
+bool offlineMode = false;
 bool displayOn = false;
 
 // tracking last sensor polling
@@ -229,35 +248,71 @@ void determineNextState() {
 
 void determineOutputs() {
   //Determine the outputs (LED, OLED, Sound) depending on the current state
+  pixels.clear(); // Set all pixel colors to 'off'
+
   switch (currentState) {
     case State::IDLE:
       //DEBUG_PRINTLN("Idle");
-      analogWrite(pinLED, 0);
-      noTone(buzzer);
+      // to the count of pixels minus one.
+      //Running stream of white LEDs
+      for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
+
+        // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+        // Here we're using a moderately bright green color:
+        pixels.setPixelColor(i, pixels.Color(255, 255, 255));
+
+        pixels.show();   // Send the updated pixel colors to the hardware.
+
+        delay(DELAYVAL); // Pause before next pass through loop
+        pixels.clear(); 
+      }
+      //analogWrite(pinLED, 0);
+      //noTone(buzzer);
       break;
     case State::STAGE1:
       //DEBUG_PRINTLN("Stage 1");
 
+      //1 LEDs on to yellow
+      pixels.setPixelColor(0, pixels.Color(185, 185, 0));
+      pixels.show();   // Send the updated pixel colors to the hardware.
       // Slow amber pulse — PWM breathe
-      analogWrite(pinLED, (millis() / 8) % 255);
-      tone(buzzer, 880, 200);
+      //analogWrite(pinLED, (millis() / 8) % 255);
+      //tone(buzzer, 880, 200);
       break;
     case State::STAGE2:
       //DEBUG_PRINTLN("Stage 2");
-      analogWrite(pinLED, 180);
-      tone(buzzer, 1047, 100);
+      
+      //2 LEDs on to orange
+      for(int i=0; i<2; i++) {
+        pixels.setPixelColor(i, pixels.Color(185, 35, 0));
+      }
+      pixels.show();   // Send the updated pixel colors to the hardware.
+      //analogWrite(pinLED, 180);
+      //tone(buzzer, 1047, 100);
       break;
     case State::STAGE3:
       //DEBUG_PRINTLN("Stage 3");
 
+      //3 LEDs on to Red
+      for(int i=0; i<3; i++) {
+        pixels.setPixelColor(i, pixels.Color(185, 0, 0));
+      }
+      pixels.show();   // Send the updated pixel colors to the hardware.
       // Rapid strobe
-      analogWrite(pinLED, (millis() / 80) % 2 == 0 ? 255 : 0);
-      tone(buzzer, 1500, 50);
+      //analogWrite(pinLED, (millis() / 80) % 2 == 0 ? 255 : 0);
+      //tone(buzzer, 1500, 50);
       break;
     case State::STAGE4:
       //DEBUG_PRINTLN("Stage 4");
-      analogWrite(pinLED, 255);
-      tone(buzzer, 2000, 500);
+      //4 LEDs on Red
+      for(int i=0; i<4; i++) {
+        pixels.setPixelColor(i, pixels.Color(185, 0, 0));
+      }
+      pixels.show();   // Send the updated pixel colors to the hardware.
+      //delay(DELAYVAL); // Pause before next pass through loop
+      //pixels.clear();
+      //analogWrite(pinLED, 255);
+      //tone(buzzer, 2000, 500);
       break;
   }
 
@@ -265,6 +320,7 @@ void determineOutputs() {
     updateOled();
     oledUpdateFlag = false;
   }
+
 }
 
 // ── OLED update ───────────────────────────────────────────────────────────────
@@ -291,6 +347,9 @@ void updateOled() {
   oled.print("Temp: ");
   oled.print(temperature, 1);
   oled.println(" F");
+  oled.print("Heat Index: ");
+  oled.print(heatIndex, 1);
+  oled.println(" F");
 
 
   //Diagnostic displays
@@ -308,6 +367,7 @@ void updateOled() {
 String buildJson() {
   String j = "{";
   j += String("\"temp\":") + String(temperature, 2) + ",";
+  j += String("\"heatIndex\":") + String(heatIndex, 2) + ",";
   j += String("\"driverPresent\":") + (driverPresent ? "true" : "false") + ",";
   j += String("\"childDetected\":") + (childDetected ? "true" : "false") + ",";
   j += String("\"stage\":") + String(currentState) + ",";
@@ -436,6 +496,7 @@ void startWiFiConnection() {
   }
   else {
     DEBUG_PRINTLN("Wifi not connected, Running in Offline mode");
+    offlineMode = true;
   } 
 }
 
@@ -486,6 +547,9 @@ void setup() {
   temperature = dht.readTemperature(true);
   humidity = dht.readHumidity();
   heatIndex = dht.computeHeatIndex(temperature,humidity);
+
+  pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
+
   onStatus = true;//(digitalRead(powerSwitch) == LOW);
   if (onStatus) {
     startWiFiConnection();
@@ -523,7 +587,7 @@ void loop() {
     oled.ssd1306_command(SSD1306_DISPLAYON);
     oledUpdateFlag = true;
   }
-  if (!wifiInitialized) startWiFiConnection();//if wifi is not connected, connect it
+  if (!wifiInitialized && !offlineMode) startWiFiConnection();//if wifi is not connected, connect it
 
   //manage alert timing 
   if (driverLeft != 0) {
@@ -589,7 +653,7 @@ void loop() {
     bool previousDriverState = driverPresent;
 
     pressureSensorValue = analogRead(pressureDivider);
-    driverPresent = (pressureSensorValue < pressureThreshold);
+    driverPresent = (pressureSensorValue > pressureThreshold);
     if (driverPresent != previousDriverState) oledUpdateFlag = true;
   }
 
@@ -617,5 +681,7 @@ void loop() {
   DEBUG_PRINTLN(heatIndex);
   DEBUG_PRINTLN("Time elapsed in since driver left: ");
   DEBUG_PRINTLN(elapsed);
+  DEBUG_PRINT("queueDisarm: ");
+  DEBUG_PRINTLN(queueDisarm);
   delay(500);
 }

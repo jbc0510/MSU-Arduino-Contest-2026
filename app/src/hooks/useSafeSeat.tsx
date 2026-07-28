@@ -46,7 +46,14 @@ async function fetchArduinoData(ip: string): Promise<SensorData | null> {
     const url = `http://${ip}/status`;
     const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
     if (!res.ok) return null;
-    return await res.json();
+    const data = await res.json();
+
+    // Ensure heatIndex and temp never pass through as undefined
+    return {
+      ...data,
+      temp: data.temp ?? 72,
+      heatIndex: data.heatIndex ?? data.temp ?? 0,
+    };
   } catch {
     return null;
   }
@@ -185,22 +192,25 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     fireEvent(0, sensors);
   }, [arduinoIp, sensors, fireEvent]);
 
-  const simulateStage = useCallback((s: AlertStage) => {
+const simulateStage = useCallback((s: AlertStage) => {
     if (s === 0) { acknowledge(); return; }
-
+ 
+    const mockTemp = s >= 3 ? 98.2 : 93.5;
+    const mockHeatIndex = s >= 3 ? 106.4 : 95.1;
+ 
     const mockAlert: SensorData = {
-      temp: s >= 3 ? 98.2 : 93.5,
-      humidity: 0,
-      heatIndex: 0,
+      temp: mockTemp,
+      humidity: 55,
+      heatIndex: mockHeatIndex,
       elapsedSecs: 0,
-      stage: 0,
+      stage: s,
       pressure: true,
       driverPresent: false,
       childDetected: true,
     };
     setSensors(mockAlert);
     setArduinoOnline(true);
-
+ 
     const elapsedMap: Record<number, number> = { 1: 5, 2: 64, 3: 92, 4: 152 };
     const elapsed = elapsedMap[s] ?? 5;
     setElapsedSecs(elapsed);
