@@ -6,15 +6,61 @@ import React, {
   useRef,
   useCallback,
 } from 'react';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { AlertStage, AlertEvent, SensorData } from '../utils/theme';
 
+// Configure foreground notification behavior globally
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 async function requestPushPermission(): Promise<boolean> {
-  console.log('[push] permission requested (stub)');
+  // Android requires explicit notification channel setup
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'SafeSeat Alerts',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF0000',
+    });
+  }
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== 'granted') {
+    console.warn('[push] Push notification permission not granted.');
+    return false;
+  }
+
   return true;
 }
 
 async function sendLocalPush(title: string, body: string): Promise<void> {
-  console.log(`[push] ${title} — ${body}`);
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: 'default',
+      },
+      trigger: null, // Fires immediately
+    });
+    console.log(`[push dispatched] ${title} — ${body}`);
+  } catch (err) {
+    console.error('[push error] Failed to schedule notification:', err);
+  }
 }
 
 const SMS_SERVER_URL = process.env.EXPO_PUBLIC_SMS_SERVER_URL;
@@ -22,7 +68,7 @@ const EMERGENCY_PHONE = process.env.EXPO_PUBLIC_EMERGENCY_PHONE;
 
 async function sendEmergencySms(message: string): Promise<void> {
   const baseUrl = process.env.EXPO_PUBLIC_SMS_SERVER_URL || 'http://172.20.95.106:5000';
-  const targetUrl = `${baseUrl}/send-alert`; // Generates: http://192.168.x.x:5000/send-alert
+  const targetUrl = `${baseUrl}/send-alert`;
 
   console.log('[SMS Debug] Attempting POST to:', targetUrl);
 
@@ -59,23 +105,36 @@ async function sendEmergencySms(message: string): Promise<void> {
 }
 
 async function fetchArduinoData(ip: string): Promise<SensorData | null> {
+  if (!ip || ip === '127.0.0.1' || ip === 'localhost') {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
     const url = `http://${ip}/status`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (!res.ok) return null;
     const data = await res.json();
 
-    // Ensure heatIndex and temp never pass through as undefined
     return {
       ...data,
       temp: data.temp ?? 72,
       heatIndex: data.heatIndex ?? data.temp ?? 0,
     };
-  } catch {
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      console.warn(`[Arduino Fetch] Request to http://${ip}/status timed out (5s).`);
+    } else {
+      console.warn(`[Arduino Fetch] Network error hitting http://${ip}/status:`, err.message);
+    }
     return null;
   }
 }
-
 
 interface SafeSeatState {
   sensors: SensorData;
@@ -109,17 +168,19 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = useState<AlertEvent[]>([]);
   const [arduinoOnline, setArduinoOnline] = useState(false);
 
-  const defaultIp = process.env.EXPO_PUBLIC_ARDUINO_IP || '127.0.0.1';
+  const defaultIp = process.env.EXPO_PUBLIC_ARDUINO_IP || '';
   const [arduinoIp, setArduinoIp] = useState(defaultIp);
 
   const stageRef = useRef<AlertStage>(0);
-  const smsSentRef = useRef(false); // prevent duplicate SMS if polling fires twice at Stage 4
-  const alertStartRef = useRef<number | null>(null);
+  const smsSentRef = useRef(false);
 
-  useEffect(() => { requestPushPermission(); }, []);
+  useEffect(() => {
+    requestPushPermission();
+  }, []);
 
   useEffect(() => {
     const poll = async () => {
+      if (!arduinoIp) return;
       const data = await fetchArduinoData(arduinoIp);
       if (data) {
         setSensors(data);
@@ -163,14 +224,12 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
       await sendLocalPush(pushTitles[s]!, messages[s]);
     }
 
-    // Stage 4: send emergency SMS 
     if (s === 4 && !smsSentRef.current) {
-      smsSentRef.current = true; // lock so polling loop can't fire it twice
+      smsSentRef.current = true;
       console.log('[SMS] Stage 4 reached — dispatching emergency SMS...');
       await sendEmergencySms(messages[4]);
     }
 
-  
     if (s === 0) {
       smsSentRef.current = false;
     }
@@ -190,17 +249,24 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
 
   const acknowledge = useCallback(async () => {
     try {
-      const url = `http://${arduinoIp}/ack`;
-      await fetch(url, {
-        method: 'POST',
-        signal: AbortSignal.timeout(2000),
-      });
-      console.log('[hardware] Reset command dispatched safely.');
+      if (arduinoIp) {
+        const url = `http://${arduinoIp}/ack`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        await fetch(url, {
+          method: 'POST',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        console.log('[hardware] Reset command dispatched safely.');
+      }
     } catch (error) {
       console.log('[hardware] Failed to dispatch remote reset command:', error);
     }
 
-    smsSentRef.current = false; // allow SMS to fire again on next alert
+    smsSentRef.current = false;
     setSensors(prev => ({ ...prev, driverPresent: true }));
     stageRef.current = 0;
     setStage(0);
@@ -209,12 +275,12 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     fireEvent(0, sensors);
   }, [arduinoIp, sensors, fireEvent]);
 
-const simulateStage = useCallback((s: AlertStage) => {
+  const simulateStage = useCallback((s: AlertStage) => {
     if (s === 0) { acknowledge(); return; }
- 
+
     const mockTemp = s >= 3 ? 98.2 : 93.5;
     const mockHeatIndex = s >= 3 ? 106.4 : 95.1;
- 
+
     const mockAlert: SensorData = {
       temp: mockTemp,
       humidity: 55,
@@ -227,7 +293,7 @@ const simulateStage = useCallback((s: AlertStage) => {
     };
     setSensors(mockAlert);
     setArduinoOnline(true);
- 
+
     const elapsedMap: Record<number, number> = { 1: 5, 2: 64, 3: 92, 4: 152 };
     const elapsed = elapsedMap[s] ?? 5;
     setElapsedSecs(elapsed);

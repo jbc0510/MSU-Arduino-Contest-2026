@@ -18,9 +18,7 @@ Child-in-vehicle monitoring dashboard with push notifications for the Arduino Un
 
 
 ```bash
-npm install
-npx expo start
-# Press 'i' for iOS simulator, 'a' for Android
+npx expo start -c --tunnel
 ```
 
 ## Project structure
