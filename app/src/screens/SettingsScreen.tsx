@@ -40,14 +40,20 @@ function SectionCard({ children }: { children: React.ReactNode }) {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
 
-  const { arduinoIp, setArduinoIp, emergencyPhone, setEmergencyPhone } = useSafeSeat();
+  const {
+    arduinoIp,
+    setArduinoIp,
+    emergencyPhone,
+    setEmergencyPhone,
+    smsEnabled,
+    setSmsEnabled,
+  } = useSafeSeat();
 
   const [localArduinoIp, setLocalArduinoIp] = useState(arduinoIp);
   const [localPhone, setLocalPhone] = useState(emergencyPhone);
   const [emergencyName, setEmergencyName] = useState('');
   const [pollInterval, setPollInterval] = useState('2');
   const [pushEnabled, setPushEnabled] = useState(true);
-  const [smsEnabled, setSmsEnabled] = useState(true);
   const [heatGate, setHeatGate] = useState('88');
   const [saved, setSaved] = useState(false);
 
@@ -71,7 +77,7 @@ export default function SettingsScreen() {
         if (map.pollInterval) setPollInterval(map.pollInterval);
         if (map.heatGate) setHeatGate(map.heatGate);
         if (map.pushEnabled) setPushEnabled(map.pushEnabled === 'true');
-        if (map.smsEnabled) setSmsEnabled(map.smsEnabled === 'true');
+        if (map.smsEnabled !== null) setSmsEnabled(map.smsEnabled === 'true');
       } catch (err) {
         console.warn('[Settings] Failed to load saved settings:', err);
       }
@@ -81,11 +87,13 @@ export default function SettingsScreen() {
 
   async function save() {
     try {
-      // Apply to live context immediately
+      console.log('[Settings] Saving emergency phone:', localPhone);
+      console.log('[Settings] Saving arduino IP:', localArduinoIp);
+      console.log('[Settings] Saving smsEnabled:', smsEnabled);
+
       setArduinoIp(localArduinoIp);
       setEmergencyPhone(localPhone);
 
-      // Persist to storage so it survives app restarts
       await AsyncStorage.multiSet([
         ['emergencyPhone', localPhone],
         ['emergencyName', emergencyName],
@@ -165,11 +173,11 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <SettingRow
           label="Emergency SMS (Stage 4)"
-          sub="Relayed via Vonage SMS Express server"
+          sub={smsEnabled ? 'Enabled — SMS will fire at Stage 4' : 'Disabled — no SMS will be sent'}
           right={
             <Switch
               value={smsEnabled}
-              onValueChange={setSmsEnabled}
+              onValueChange={setSmsEnabled}  // updates context immediately, no Save needed
               trackColor={{ false: COLORS.border, true: COLORS.teal }}
               thumbColor="#fff"
             />
