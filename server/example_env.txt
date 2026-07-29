@@ -1,6 +1,5 @@
 VONAGE_API_KEY=...
 VONAGE_API_SECRET=...
 VONAGE_PHONE_NUMBER=+1{number provided by vonage}
-EXPO_PUBLIC_EMERGENCY_PHONE=+1{someones number}
-//  (run `ipconfig` on Windows to find it)
-EXPO_PUBLIC_SMS_SERVER_URL=http://{ip}
+EXPO_PUBLIC_EMERGENCY_PHONE=+1{someones number} // This is the number that will receive the Stage 4 text
+PORT=5000
