@@ -174,7 +174,7 @@ export default function DashboardScreen() {
           accentColor={COLORS.shieldBlue}
         />
         <MetricCard
-          icon="🔥"
+          icon=""
           iconBg={COLORS.peach}
           label="Heat Index"
           value={sensors.heatIndex.toFixed(1)}
@@ -204,7 +204,7 @@ export default function DashboardScreen() {
         </View>
         <View style={styles.card}>
           <SensorRow
-            icon="👶"
+            icon=""
             iconBg={COLORS.mint}
             label="Child Detection (Vision AI)"
             value={sensors.childDetected ? 'Child detected' : 'Child not detected'}
@@ -212,7 +212,7 @@ export default function DashboardScreen() {
           />
           <View style={styles.divider} />
           <SensorRow
-            icon="🚶"
+            icon=""
             iconBg={COLORS.peach}
             label="Driver Presence"
             value={sensors.driverPresent ? 'Present' : 'Not detected'}
@@ -220,7 +220,7 @@ export default function DashboardScreen() {
           />
           <View style={styles.divider} />
           <SensorRow
-            icon="🌡"
+            icon=""
             iconBg={COLORS.pink}
             label="Temperature Sensor"
             value={`${sensors.temp.toFixed(1)}°F`}

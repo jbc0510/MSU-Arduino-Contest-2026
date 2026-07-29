@@ -21,7 +21,6 @@ Notifications.setNotificationHandler({
 });
 
 async function requestPushPermission(): Promise<boolean> {
-  // Android requires explicit notification channel setup
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
       name: 'SafeSeat Alerts',
@@ -55,7 +54,7 @@ async function sendLocalPush(title: string, body: string): Promise<void> {
         body,
         sound: 'default',
       },
-      trigger: null, // Fires immediately
+      trigger: null,
     });
     console.log(`[push dispatched] ${title} — ${body}`);
   } catch (err) {
@@ -63,24 +62,28 @@ async function sendLocalPush(title: string, body: string): Promise<void> {
   }
 }
 
-const SMS_SERVER_URL = process.env.EXPO_PUBLIC_SMS_SERVER_URL;
-const EMERGENCY_PHONE = process.env.EXPO_PUBLIC_EMERGENCY_PHONE;
-
-async function sendEmergencySms(message: string): Promise<void> {
+// Takes phone as a parameter so Settings screen changes apply immediately
+async function sendEmergencySms(message: string, phone: string): Promise<void> {
   const baseUrl = process.env.EXPO_PUBLIC_SMS_SERVER_URL || 'http://172.20.95.106:5000';
   const targetUrl = `${baseUrl}/send-alert`;
 
   console.log('[SMS Debug] Attempting POST to:', targetUrl);
+  console.log('[SMS Debug] Sending to phone:', phone);
+
+  if (!phone) {
+    console.error('[SMS] No emergency phone number set — go to Settings to add one.');
+    return;
+  }
 
   try {
     const res = await fetch(targetUrl, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json' 
+        'Accept': 'application/json',
       },
       body: JSON.stringify({
-        phoneNumber: EMERGENCY_PHONE,
+        phoneNumber: phone,
         message,
       }),
     });
@@ -144,6 +147,8 @@ interface SafeSeatState {
   arduinoOnline: boolean;
   arduinoIp: string;
   setArduinoIp: (ip: string) => void;
+  emergencyPhone: string;
+  setEmergencyPhone: (phone: string) => void;
   acknowledge: () => void;
   simulateStage: (stage: AlertStage) => void;
 }
@@ -171,8 +176,17 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   const defaultIp = process.env.EXPO_PUBLIC_ARDUINO_IP || '';
   const [arduinoIp, setArduinoIp] = useState(defaultIp);
 
+  const defaultPhone = process.env.EXPO_PUBLIC_EMERGENCY_PHONE || '';
+  const [emergencyPhone, setEmergencyPhone] = useState(defaultPhone);
+
   const stageRef = useRef<AlertStage>(0);
   const smsSentRef = useRef(false);
+
+  // Keep a ref so fireEvent always has the latest phone number
+  const emergencyPhoneRef = useRef(emergencyPhone);
+  useEffect(() => {
+    emergencyPhoneRef.current = emergencyPhone;
+  }, [emergencyPhone]);
 
   useEffect(() => {
     requestPushPermission();
@@ -211,13 +225,13 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
       1: `Child detected in vehicle — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
       2: `Push sent to driver — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
       3: `Full alarm active — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
-      4: `🆘 SafeSeat EMERGENCY: Child left alone in vehicle. Cabin temp ${data.temp?.toFixed(1) ?? 0}°F. Immediate action required.`,
+      4: `SafeSeat EMERGENCY: Child left alone in vehicle. Cabin temp ${data.temp?.toFixed(1) ?? 0}°F. Immediate action required.`,
     };
 
     const pushTitles: Partial<Record<AlertStage, string>> = {
-      2: '⚠️ Child in vehicle',
-      3: '🚨 ALARM — Child in vehicle',
-      4: '🆘 Emergency — Child in vehicle',
+      2: 'Child in vehicle',
+      3: 'ALARM — Child in vehicle',
+      4: 'Emergency — Child in vehicle',
     };
 
     if (pushTitles[s]) {
@@ -227,7 +241,7 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     if (s === 4 && !smsSentRef.current) {
       smsSentRef.current = true;
       console.log('[SMS] Stage 4 reached — dispatching emergency SMS...');
-      await sendEmergencySms(messages[4]);
+      await sendEmergencySms(messages[4], emergencyPhoneRef.current);
     }
 
     if (s === 0) {
@@ -253,13 +267,8 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
         const url = `http://${arduinoIp}/ack`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        await fetch(url, {
-          method: 'POST',
-          signal: controller.signal,
-        });
+        await fetch(url, { method: 'POST', signal: controller.signal });
         clearTimeout(timeoutId);
-
         console.log('[hardware] Reset command dispatched safely.');
       }
     } catch (error) {
@@ -303,7 +312,19 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   }, [acknowledge, fireEvent]);
 
   return (
-    <CTX.Provider value={{ sensors, stage, elapsedSecs, events, arduinoOnline, arduinoIp, setArduinoIp, acknowledge, simulateStage }}>
+    <CTX.Provider value={{
+      sensors,
+      stage,
+      elapsedSecs,
+      events,
+      arduinoOnline,
+      arduinoIp,
+      setArduinoIp,
+      emergencyPhone,
+      setEmergencyPhone,
+      acknowledge,
+      simulateStage,
+    }}>
       {children}
     </CTX.Provider>
   );
