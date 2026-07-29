@@ -101,7 +101,7 @@ export const STAGE_META: Record<AlertStage, {
   },
   1: {
     label: 'Stage 1',
-    sublabel: 'Local alert — OLED + LEDs + chime',
+    sublabel: 'OLED Warning',
     color: COLORS.amber,
     dimColor: COLORS.amberDim,
     textColor: COLORS.amberText,
@@ -109,7 +109,7 @@ export const STAGE_META: Record<AlertStage, {
   },
   2: {
     label: 'Stage 2',
-    sublabel: 'Push notification sent to driver',
+    sublabel: 'OLED Warning + Low Priority Push Notification',
     color: COLORS.blue,
     dimColor: COLORS.blueDim,
     textColor: COLORS.blueText,
@@ -117,7 +117,7 @@ export const STAGE_META: Record<AlertStage, {
   },
   3: {
     label: 'Stage 3',
-    sublabel: 'Full alarm — siren + strobe LEDs',
+    sublabel: 'OLED Warning + Emergency SMS dispatched via Vonage + High Priority Push Notification',
     color: COLORS.coral,
     dimColor: COLORS.coralDim,
     textColor: COLORS.coralText,
@@ -125,7 +125,7 @@ export const STAGE_META: Record<AlertStage, {
   },
   4: {
     label: 'Stage 4',
-    sublabel: 'Emergency SMS dispatched via Twilio',
+    sublabel: 'OLED Warning + 911 SMS dispatched via Vonage + High Priority Push Notification',
     color: COLORS.red,
     dimColor: COLORS.redDim,
     textColor: COLORS.redText,

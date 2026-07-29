@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADIUS, SPACING } from '../utils/theme';
-import { useSafeSeat } from '../hooks/useSafeSeat'; // Import hook
+import { useSafeSeat } from '../hooks/useSafeSeat';
 
 function SettingRow({
   label,
@@ -39,15 +39,11 @@ function SectionCard({ children }: { children: React.ReactNode }) {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   
-  // Consume elevated global state values directly from React Context
   const { arduinoIp, setArduinoIp } = useSafeSeat();
 
   const [pollInterval, setPollInterval] = useState('2');
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [emergencyName, setEmergencyName] = useState('');
-  const [twilioSid, setTwilioSid] = useState('');
-  const [twilioToken, setTwilioToken] = useState('');
-  const [twilioFrom, setTwilioFrom] = useState('');
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(true);
   const [heatGate, setHeatGate] = useState('88');
@@ -76,8 +72,8 @@ export default function SettingsScreen() {
           right={
             <TextInput
               style={styles.input}
-              value={arduinoIp}            // Maps to context value
-              onChangeText={setArduinoIp}  // Updates context value on change
+              value={arduinoIp}
+              onChangeText={setArduinoIp}
               placeholder="192.168.x.x"
               placeholderTextColor={COLORS.muted}
               keyboardType="decimal-pad"
@@ -120,7 +116,7 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <SettingRow
           label="Emergency SMS (Stage 4)"
-          sub="Requires Twilio credentials below"
+          sub="Relayed via Vonage SMS Express server"
           right={
             <Switch
               value={smsEnabled}
@@ -177,62 +173,12 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <SettingRow
           label="Phone number"
-          sub="Receives Twilio SMS at Stage 4"
+          sub="Receives emergency SMS dispatch at Stage 4"
           right={
             <TextInput
               style={styles.input}
               value={emergencyPhone}
               onChangeText={setEmergencyPhone}
-              placeholder="+1 555 000 0000"
-              placeholderTextColor={COLORS.muted}
-              keyboardType="phone-pad"
-            />
-          }
-        />
-      </SectionCard>
-
-      {/* Twilio */}
-      <Text style={styles.sectionLabel}>Twilio credentials</Text>
-      <SectionCard>
-        <SettingRow
-          label="Account SID"
-          right={
-            <TextInput
-              style={styles.input}
-              value={twilioSid}
-              onChangeText={setTwilioSid}
-              placeholder="ACxxxxxxxxxxxxxxxx"
-              placeholderTextColor={COLORS.muted}
-              autoCorrect={false}
-              autoCapitalize="none"
-              secureTextEntry
-            />
-          }
-        />
-        <View style={styles.divider} />
-        <SettingRow
-          label="Auth token"
-          right={
-            <TextInput
-              style={styles.input}
-              value={twilioToken}
-              onChangeText={setTwilioToken}
-              placeholder="••••••••••••••••"
-              placeholderTextColor={COLORS.muted}
-              secureTextEntry
-              autoCorrect={false}
-            />
-          }
-        />
-        <View style={styles.divider} />
-        <SettingRow
-          label="From phone number"
-          sub="Your Twilio number"
-          right={
-            <TextInput
-              style={styles.input}
-              value={twilioFrom}
-              onChangeText={setTwilioFrom}
               placeholder="+1 555 000 0000"
               placeholderTextColor={COLORS.muted}
               keyboardType="phone-pad"
@@ -255,7 +201,7 @@ export default function SettingsScreen() {
       {/* About */}
       <View style={styles.about}>
         <Text style={styles.aboutText}>SafeSeat · Arduino Uno R4 WiFi</Text>
-        <Text style={styles.aboutText}>Push via local WiFi · SMS via Twilio</Text>
+        <Text style={styles.aboutText}>Push via local WiFi · Emergency SMS via Express Relay</Text>
       </View>
 
       <View style={{ height: insets.bottom + SPACING.lg }} />
