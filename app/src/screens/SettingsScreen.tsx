@@ -103,7 +103,7 @@ export default function SettingsScreen() {
       <SectionCard>
         <SettingRow
           label="Push notifications"
-          sub="Stage 2 & 3 alerts sent to this device"
+          sub="All push alerts sent to this device"
           right={
             <Switch
               value={pushEnabled}
@@ -115,7 +115,7 @@ export default function SettingsScreen() {
         />
         <View style={styles.divider} />
         <SettingRow
-          label="Emergency SMS (Stage 4)"
+          label="Emergency SMS (Stage 3 & 4)"
           sub="Relayed via Vonage SMS Express server"
           right={
             <Switch
@@ -126,32 +126,6 @@ export default function SettingsScreen() {
             />
           }
         />
-      </SectionCard>
-
-      {/* Heat gate */}
-      <Text style={styles.sectionLabel}>Stage 4 heat gate</Text>
-      <SectionCard>
-        <SettingRow
-          label="Heat index threshold (°F)"
-          sub="Stage 4 SMS only fires above this value AND after 2:30"
-          right={
-            <TextInput
-              style={[styles.input, { width: 70 }]}
-              value={heatGate}
-              onChangeText={setHeatGate}
-              placeholder="88"
-              placeholderTextColor={COLORS.muted}
-              keyboardType="number-pad"
-            />
-          }
-        />
-        <View style={styles.divider} />
-        <View style={styles.callout}>
-          <Text style={styles.calloutText}>
-            Dual-gate: Stage 4 requires BOTH the 2:30 timer AND heat index ≥ {heatGate}°F.
-            A 86°F cabin at 2:31 will not trigger SMS.
-          </Text>
-        </View>
       </SectionCard>
 
       {/* Emergency contact */}
@@ -173,7 +147,7 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <SettingRow
           label="Phone number"
-          sub="Receives emergency SMS dispatch at Stage 4"
+          sub="Receives emergency SMS dispatch at Stage 3"
           right={
             <TextInput
               style={styles.input}

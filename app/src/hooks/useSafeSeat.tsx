@@ -205,12 +205,13 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, [arduinoIp]);
 
+  
   const fireEvent = useCallback(async (s: AlertStage, data: SensorData) => {
     const messages: Record<AlertStage, string> = {
       0: 'System reset to idle.',
       1: `Child detected in vehicle — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
-      2: `Push sent to driver — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
-      3: `Full alarm active — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
+      2: `Safeseat Push: Child in vehicle — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
+      3: `Safeseat Push: Full alarm active — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
       4: `🆘 SafeSeat EMERGENCY: Child left alone in vehicle. Cabin temp ${data.temp?.toFixed(1) ?? 0}°F. Immediate action required.`,
     };
 
@@ -235,7 +236,8 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     }
 
     const event: AlertEvent = {
-      id: `${Date.now()}`,
+      // Append random string to guarantee uniqueness even in identical millisecond executions
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       stage: s,
       timestamp: new Date(),
       message: messages[s],
@@ -267,13 +269,28 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     }
 
     smsSentRef.current = false;
-    setSensors(prev => ({ ...prev, driverPresent: true }));
+
+    // Reset sensors state to idle ambient values
+    const resetSensors: SensorData = {
+      temp: 72.0,
+      humidity: 45,
+      heatIndex: 72.0,
+      elapsedSecs: 0,
+      stage: 0,
+      pressure: false,
+      driverPresent: true,
+      childDetected: false,
+    };
+
+    setSensors(resetSensors);
     stageRef.current = 0;
     setStage(0);
     setElapsedSecs(0);
     setEvents(prev => prev.map(e => ({ ...e, acknowledged: true })));
-    fireEvent(0, sensors);
-  }, [arduinoIp, sensors, fireEvent]);
+    
+    // Fire event with reset sensor data
+    fireEvent(0, resetSensors);
+  }, [arduinoIp, fireEvent]);
 
   const simulateStage = useCallback((s: AlertStage) => {
     if (s === 0) { acknowledge(); return; }

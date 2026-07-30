@@ -109,7 +109,7 @@ export default function AlertsScreen() {
                       {meta.label}
                     </Text>
                     <Text style={[styles.timelineTrigger, { color: reached ? meta.color : COLORS.muted }]}>
-                      {s === 1 ? '0 s' : s === 2 ? '60 s' : s === 3 ? '90 s' : '2:30 + heat gate'}
+                      {s === 1 ? '0 s' : s === 2 ? '60 s' : s === 3 ? '90 s' : '2:00'}
                     </Text>
                   </View>
                   <Text style={[styles.timelineSub, { color: reached ? COLORS.textSec : COLORS.muted }]}>
