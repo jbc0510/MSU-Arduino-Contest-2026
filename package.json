@@ -1,5 +1,11 @@
 {
   "dependencies": {
-    "@vonage/server-sdk": "^3.27.0"
+    "@vonage/server-sdk": "^3.27.0",
+    "expo-notifications": "~57.0.8",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.4",
+    "typescript": "~6.0.3"
   }
 }

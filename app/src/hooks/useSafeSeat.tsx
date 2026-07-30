@@ -10,7 +10,6 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { AlertStage, AlertEvent, SensorData } from '../utils/theme';
 
-// Configure foreground notification behavior globally
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -21,7 +20,6 @@ Notifications.setNotificationHandler({
 });
 
 async function requestPushPermission(): Promise<boolean> {
-  // Android requires explicit notification channel setup
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
       name: 'SafeSeat Alerts',
@@ -50,12 +48,8 @@ async function requestPushPermission(): Promise<boolean> {
 async function sendLocalPush(title: string, body: string): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        sound: 'default',
-      },
-      trigger: null, // Fires immediately
+      content: { title, body, sound: 'default' },
+      trigger: null,
     });
     console.log(`[push dispatched] ${title} — ${body}`);
   } catch (err) {
@@ -63,51 +57,50 @@ async function sendLocalPush(title: string, body: string): Promise<void> {
   }
 }
 
-const SMS_SERVER_URL = process.env.EXPO_PUBLIC_SMS_SERVER_URL;
-const EMERGENCY_PHONE = process.env.EXPO_PUBLIC_EMERGENCY_PHONE;
-
-async function sendEmergencySms(message: string): Promise<void> {
+async function sendSms(message: string, phone: string, label: string): Promise<void> {
   const baseUrl = process.env.EXPO_PUBLIC_SMS_SERVER_URL || 'http://172.20.95.106:5000';
   const targetUrl = `${baseUrl}/send-alert`;
 
-  console.log('[SMS Debug] Attempting POST to:', targetUrl);
+  console.log(`[SMS Debug][${label}] Attempting POST to:`, targetUrl);
+  console.log(`[SMS Debug][${label}] Sending to phone:`, phone);
+
+  if (!phone) {
+    console.error(`[SMS][${label}] No phone number set — skipping.`);
+    return;
+  }
 
   try {
     const res = await fetch(targetUrl, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json' 
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        phoneNumber: EMERGENCY_PHONE,
-        message,
-      }),
+      body: JSON.stringify({ phoneNumber: phone, message }),
     });
 
     const responseText = await res.text();
 
     if (responseText.trim().startsWith('<')) {
-      console.error(`[SMS Error] Server returned HTML instead of JSON (Status ${res.status}):`);
-      console.error(responseText.slice(0, 300));
+      console.error(`[SMS Error][${label}] Server returned HTML (Status ${res.status}):`, responseText.slice(0, 300));
       return;
     }
 
     const data = JSON.parse(responseText);
     if (data.success) {
-      console.log('[SMS] Emergency SMS sent successfully. ID:', data.messageId);
+      console.log(`[SMS][${label}] Sent successfully. ID:`, data.messageId);
     } else {
-      console.error('[SMS] Server returned failure:', data.error ?? data.message);
+      console.error(`[SMS][${label}] Server returned failure:`, data.error ?? data.message);
     }
   } catch (err) {
-    console.error('[SMS] Failed to reach SMS server:', err);
+    console.error(`[SMS][${label}] Failed to reach SMS server:`, err);
   }
 }
 
+let lastArduinoWarnTime = 0;
+
 async function fetchArduinoData(ip: string): Promise<SensorData | null> {
-  if (!ip || ip === '127.0.0.1' || ip === 'localhost') {
-    return null;
-  }
+  if (!ip || ip === '127.0.0.1' || ip === 'localhost') return null;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -116,10 +109,8 @@ async function fetchArduinoData(ip: string): Promise<SensorData | null> {
     const url = `http://${ip}/status`;
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
-
     if (!res.ok) return null;
     const data = await res.json();
-
     return {
       ...data,
       temp: data.temp ?? 72,
@@ -127,10 +118,10 @@ async function fetchArduinoData(ip: string): Promise<SensorData | null> {
     };
   } catch (err: any) {
     clearTimeout(timeoutId);
-    if (err.name === 'AbortError') {
-      console.warn(`[Arduino Fetch] Request to http://${ip}/status timed out (5s).`);
-    } else {
-      console.warn(`[Arduino Fetch] Network error hitting http://${ip}/status:`, err.message);
+    const now = Date.now();
+    if (now - lastArduinoWarnTime > 30000) {
+      lastArduinoWarnTime = now;
+      console.warn(`[Arduino] Unreachable at http://${ip}/status — will retry silently.`);
     }
     return null;
   }
@@ -144,6 +135,10 @@ interface SafeSeatState {
   arduinoOnline: boolean;
   arduinoIp: string;
   setArduinoIp: (ip: string) => void;
+  emergencyPhone: string;
+  setEmergencyPhone: (phone: string) => void;
+  smsEnabled: boolean;
+  setSmsEnabled: (enabled: boolean) => void;
   acknowledge: () => void;
   simulateStage: (stage: AlertStage) => void;
 }
@@ -171,12 +166,30 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   const defaultIp = process.env.EXPO_PUBLIC_ARDUINO_IP || '';
   const [arduinoIp, setArduinoIp] = useState(defaultIp);
 
-  const stageRef = useRef<AlertStage>(0);
-  const smsSentRef = useRef(false);
+  const defaultPhone = process.env.EXPO_PUBLIC_EMERGENCY_PHONE || '';
+  const [emergencyPhone, setEmergencyPhone] = useState(defaultPhone);
 
+  const [smsEnabled, setSmsEnabled] = useState(true);
+
+  const stageRef = useRef<AlertStage>(0);
+
+  // Separate sent locks for stage 3 and stage 4 so each fires exactly once per alert
+  const sms3SentRef = useRef(false);
+  const sms4SentRef = useRef(false);
+
+  const emergencyPhoneRef = useRef(emergencyPhone);
   useEffect(() => {
-    requestPushPermission();
-  }, []);
+    emergencyPhoneRef.current = emergencyPhone;
+    console.log('[SMS] emergencyPhoneRef updated to:', emergencyPhone);
+  }, [emergencyPhone]);
+
+  const smsEnabledRef = useRef(smsEnabled);
+  useEffect(() => {
+    smsEnabledRef.current = smsEnabled;
+    console.log('[SMS] smsEnabled updated to:', smsEnabled);
+  }, [smsEnabled]);
+
+  useEffect(() => { requestPushPermission(); }, []);
 
   useEffect(() => {
     const poll = async () => {
@@ -210,29 +223,49 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     const messages: Record<AlertStage, string> = {
       0: 'System reset to idle.',
       1: `Child detected in vehicle — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
-      2: `Safeseat Push: Child in vehicle — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
-      3: `Safeseat Push: Full alarm active — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
-      4: `🆘 SafeSeat EMERGENCY: Child left alone in vehicle. Cabin temp ${data.temp?.toFixed(1) ?? 0}°F. Immediate action required.`,
+      2: `Push sent to driver — cabin ${data.temp?.toFixed(1) ?? 0}°F`,
+      3: `SafeSeat ALERT: A child has been left alone in a vehicle. Cabin temperature is ${data.temp?.toFixed(1) ?? 0}°F. Immediate attention required.`,
+      4: `EMERGENCY — 911 ALERT: Child in danger in unattended vehicle. Cabin temperature ${data.temp?.toFixed(1) ?? 0}°F / heat index ${data.heatIndex?.toFixed(1) ?? 0}°F. Please dispatch immediately. [SafeSeat automated alert]`,
     };
 
     const pushTitles: Partial<Record<AlertStage, string>> = {
-      2: '⚠️ Child in vehicle',
-      3: '🚨 ALARM — Child in vehicle',
-      4: '🆘 Emergency — Child in vehicle',
+      2: 'Child in vehicle',
+      3: 'ALARM — Child in vehicle',
+      4: 'Emergency — Child in vehicle',
     };
 
     if (pushTitles[s]) {
       await sendLocalPush(pushTitles[s]!, messages[s]);
     }
 
-    if (s === 4 && !smsSentRef.current) {
-      smsSentRef.current = true;
-      console.log('[SMS] Stage 4 reached — dispatching emergency SMS...');
-      await sendEmergencySms(messages[4]);
+    // Stage 3 — SMS to emergency contact
+    if (s === 3 && !sms3SentRef.current) {
+      sms3SentRef.current = true;
+      if (smsEnabledRef.current) {
+        console.log('[SMS] Stage 3 — dispatching SMS to emergency contact...');
+        await sendSms(messages[3], emergencyPhoneRef.current, 'emergency-contact');
+      } else {
+        console.log('[SMS] Stage 3 reached but SMS is disabled in Settings — skipping.');
+      }
     }
 
+    // Stage 4 — SMS to law enforcement placeholder (same number for now)
+    if (s === 4 && !sms4SentRef.current) {
+      sms4SentRef.current = true;
+      if (smsEnabledRef.current) {
+        console.log('[SMS] Stage 4 — dispatching SMS to law enforcement (placeholder)...');
+        // TODO: replace emergencyPhoneRef.current with a dedicated law enforcement number
+        // when real 911 SMS integration is available
+        await sendSms(messages[4], emergencyPhoneRef.current, 'law-enforcement-placeholder');
+      } else {
+        console.log('[SMS] Stage 4 reached but SMS is disabled in Settings — skipping.');
+      }
+    }
+
+    // Reset locks when system returns to idle
     if (s === 0) {
-      smsSentRef.current = false;
+      sms3SentRef.current = false;
+      sms4SentRef.current = false;
     }
 
     const event: AlertEvent = {
@@ -255,20 +288,13 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
         const url = `http://${arduinoIp}/ack`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        await fetch(url, {
-          method: 'POST',
-          signal: controller.signal,
-        });
+        await fetch(url, { method: 'POST', signal: controller.signal });
         clearTimeout(timeoutId);
-
         console.log('[hardware] Reset command dispatched safely.');
       }
     } catch (error) {
       console.log('[hardware] Failed to dispatch remote reset command:', error);
     }
-
-    smsSentRef.current = false;
 
     // Reset sensors state to idle ambient values
     const resetSensors: SensorData = {
@@ -283,6 +309,9 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
     };
 
     setSensors(resetSensors);
+    sms3SentRef.current = false;
+    sms4SentRef.current = false;
+    setSensors(prev => ({ ...prev, driverPresent: true }));
     stageRef.current = 0;
     setStage(0);
     setElapsedSecs(0);
@@ -320,7 +349,21 @@ export function SafeSeatProvider({ children }: { children: React.ReactNode }) {
   }, [acknowledge, fireEvent]);
 
   return (
-    <CTX.Provider value={{ sensors, stage, elapsedSecs, events, arduinoOnline, arduinoIp, setArduinoIp, acknowledge, simulateStage }}>
+    <CTX.Provider value={{
+      sensors,
+      stage,
+      elapsedSecs,
+      events,
+      arduinoOnline,
+      arduinoIp,
+      setArduinoIp,
+      emergencyPhone,
+      setEmergencyPhone,
+      smsEnabled,
+      setSmsEnabled,
+      acknowledge,
+      simulateStage,
+    }}>
       {children}
     </CTX.Provider>
   );

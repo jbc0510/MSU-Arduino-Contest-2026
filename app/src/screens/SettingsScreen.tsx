@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   View,
@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, RADIUS, SPACING } from '../utils/theme';
 import { useSafeSeat } from '../hooks/useSafeSeat';
 
@@ -38,20 +39,72 @@ function SectionCard({ children }: { children: React.ReactNode }) {
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  
-  const { arduinoIp, setArduinoIp } = useSafeSeat();
 
-  const [pollInterval, setPollInterval] = useState('2');
-  const [emergencyPhone, setEmergencyPhone] = useState('');
+  const {
+    arduinoIp,
+    setArduinoIp,
+    emergencyPhone,
+    setEmergencyPhone,
+    smsEnabled,
+    setSmsEnabled,
+  } = useSafeSeat();
+
+  const [localArduinoIp, setLocalArduinoIp] = useState(arduinoIp);
+  const [localPhone, setLocalPhone] = useState(emergencyPhone);
   const [emergencyName, setEmergencyName] = useState('');
+  const [pollInterval, setPollInterval] = useState('2');
   const [pushEnabled, setPushEnabled] = useState(true);
-  const [smsEnabled, setSmsEnabled] = useState(true);
-  const [heatGate, setHeatGate] = useState('88');
   const [saved, setSaved] = useState(false);
 
-  function save() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // Load persisted settings on mount
+  useEffect(() => {
+    async function load() {
+      try {
+        const stored = await AsyncStorage.multiGet([
+          'emergencyPhone',
+          'emergencyName',
+          'arduinoIp',
+          'pollInterval',
+          'pushEnabled',
+          'smsEnabled',
+        ]);
+        const map = Object.fromEntries(stored.map(([k, v]) => [k, v]));
+        if (map.emergencyPhone) { setLocalPhone(map.emergencyPhone); setEmergencyPhone(map.emergencyPhone); }
+        if (map.emergencyName) setEmergencyName(map.emergencyName);
+        if (map.arduinoIp) { setLocalArduinoIp(map.arduinoIp); setArduinoIp(map.arduinoIp); }
+        if (map.pollInterval) setPollInterval(map.pollInterval);
+        if (map.pushEnabled) setPushEnabled(map.pushEnabled === 'true');
+        if (map.smsEnabled !== null) setSmsEnabled(map.smsEnabled === 'true');
+      } catch (err) {
+        console.warn('[Settings] Failed to load saved settings:', err);
+      }
+    }
+    load();
+  }, []);
+
+  async function save() {
+    try {
+      console.log('[Settings] Saving emergency phone:', localPhone);
+      console.log('[Settings] Saving arduino IP:', localArduinoIp);
+      console.log('[Settings] Saving smsEnabled:', smsEnabled);
+
+      setArduinoIp(localArduinoIp);
+      setEmergencyPhone(localPhone);
+
+      await AsyncStorage.multiSet([
+        ['emergencyPhone', localPhone],
+        ['emergencyName', emergencyName],
+        ['arduinoIp', localArduinoIp],
+        ['pollInterval', pollInterval],
+        ['pushEnabled', String(pushEnabled)],
+        ['smsEnabled', String(smsEnabled)],
+      ]);
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.warn('[Settings] Failed to save settings:', err);
+    }
   }
 
   return (
@@ -72,8 +125,8 @@ export default function SettingsScreen() {
           right={
             <TextInput
               style={styles.input}
-              value={arduinoIp}
-              onChangeText={setArduinoIp}
+              value={localArduinoIp}
+              onChangeText={setLocalArduinoIp}
               placeholder="192.168.x.x"
               placeholderTextColor={COLORS.muted}
               keyboardType="decimal-pad"
@@ -116,11 +169,12 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <SettingRow
           label="Emergency SMS (Stage 3 & 4)"
-          sub="Relayed via Vonage SMS Express server"
+          sub={smsEnabled ? 'Enabled — SMS will fire at Stage 4' : 'Disabled — no SMS will be sent'}
+
           right={
             <Switch
               value={smsEnabled}
-              onValueChange={setSmsEnabled}
+              onValueChange={setSmsEnabled}  // updates context immediately, no Save needed
               trackColor={{ false: COLORS.border, true: COLORS.teal }}
               thumbColor="#fff"
             />
@@ -151,8 +205,8 @@ export default function SettingsScreen() {
           right={
             <TextInput
               style={styles.input}
-              value={emergencyPhone}
-              onChangeText={setEmergencyPhone}
+              value={localPhone}
+              onChangeText={setLocalPhone}
               placeholder="+1 555 000 0000"
               placeholderTextColor={COLORS.muted}
               keyboardType="phone-pad"
